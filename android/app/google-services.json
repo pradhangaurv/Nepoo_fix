@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "529329312613",
+    "project_id": "nepoofix",
+    "storage_bucket": "nepoofix.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:529329312613:android:48753c7174b9a75f73078c",
+        "android_client_info": {
+          "package_name": "com.example.nepoo_fix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9pvGW9ugaDZYXBlu56V-zyISAB6OrTuQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
