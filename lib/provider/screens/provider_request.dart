@@ -52,6 +52,70 @@ class _ProviderRequestState extends State<ProviderRequest> {
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Request marked as ${_statusLabel(status)}')),
+    );
+  }
+
+  Future<void> _confirmAndUpdate(
+      String requestId,
+      String status,
+      String title,
+      String message,
+      ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _updateStatus(requestId, status);
+    }
+  }
+
+  Widget _summaryCard(String title, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(title, textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -80,7 +144,9 @@ class _ProviderRequestState extends State<ProviderRequest> {
             return Center(child: Text('Error: ${snap.error}'));
           }
 
-          final docs = (snap.data?.docs ?? []).where((doc) {
+          final allDocs = snap.data?.docs ?? [];
+
+          final activeDocs = allDocs.where((doc) {
             final status = (doc.data()['status'] ?? 'pending').toString();
             return status == 'pending' ||
                 status == 'accepted' ||
@@ -95,119 +161,182 @@ class _ProviderRequestState extends State<ProviderRequest> {
               return 0;
             });
 
-          if (docs.isEmpty) {
+          final pendingCount = activeDocs
+              .where((doc) => (doc.data()['status'] ?? '') == 'pending')
+              .length;
+          final acceptedCount = activeDocs
+              .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
+              .length;
+          final onWayCount = activeDocs
+              .where((doc) => (doc.data()['status'] ?? '') == 'on_the_way')
+              .length;
+
+          if (activeDocs.isEmpty) {
             return const Center(
               child: Text('No active requests right now'),
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data();
-              final status = (data['status'] ?? 'pending').toString();
-              final userName = data['userName']?.toString() ?? 'User';
-              final userPhone = data['userPhone']?.toString() ?? '';
-              final serviceType = data['serviceType']?.toString() ?? 'Service';
-              final problem = data['problemDescription']?.toString() ?? '';
-              final address = data['serviceAddress']?.toString() ?? '';
-              final createdAt = data['createdAt'];
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              userName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _statusColor(status).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              _statusLabel(status),
-                              style: TextStyle(
-                                color: _statusColor(status),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Service: $serviceType'),
-                      const SizedBox(height: 4),
-                      Text('Problem: $problem'),
-                      const SizedBox(height: 4),
-                      Text('Address: $address'),
-                      const SizedBox(height: 4),
-                      Text('Phone: $userPhone'),
-                      const SizedBox(height: 4),
-                      Text('Requested: ${_formatDate(createdAt)}'),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          if (status == 'pending')
-                            ElevatedButton(
-                              onPressed: () => _updateStatus(doc.id, 'accepted'),
-                              child: const Text('Accept'),
-                            ),
-                          if (status == 'pending')
-                            ElevatedButton(
-                              onPressed: () => _updateStatus(doc.id, 'rejected'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Reject'),
-                            ),
-                          if (status == 'accepted')
-                            ElevatedButton(
-                              onPressed: () =>
-                                  _updateStatus(doc.id, 'on_the_way'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Mark On The Way'),
-                            ),
-                          if (status == 'accepted' || status == 'on_the_way')
-                            ElevatedButton(
-                              onPressed: () =>
-                                  _updateStatus(doc.id, 'completed'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Complete'),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+          return Column(
+            children: [
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    _summaryCard(
+                      'Pending',
+                      pendingCount.toString(),
+                      Icons.hourglass_top,
+                      Colors.deepPurple,
+                    ),
+                    const SizedBox(width: 8),
+                    _summaryCard(
+                      'Accepted',
+                      acceptedCount.toString(),
+                      Icons.check_circle_outline,
+                      Colors.blue,
+                    ),
+                    const SizedBox(width: 8),
+                    _summaryCard(
+                      'On The Way',
+                      onWayCount.toString(),
+                      Icons.directions_car,
+                      Colors.orange,
+                    ),
+                  ],
                 ),
-              );
-            },
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: activeDocs.length,
+                  itemBuilder: (context, index) {
+                    final doc = activeDocs[index];
+                    final data = doc.data();
+                    final status = (data['status'] ?? 'pending').toString();
+                    final userName = data['userName']?.toString() ?? 'User';
+                    final userPhone = data['userPhone']?.toString() ?? '';
+                    final serviceType = data['serviceType']?.toString() ?? 'Service';
+                    final problem = data['problemDescription']?.toString() ?? '';
+                    final address = data['serviceAddress']?.toString() ?? '';
+                    final createdAt = data['createdAt'];
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    userName,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _statusColor(status).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    _statusLabel(status),
+                                    style: TextStyle(
+                                      color: _statusColor(status),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text('Service: $serviceType'),
+                            const SizedBox(height: 4),
+                            Text('Problem: $problem'),
+                            const SizedBox(height: 4),
+                            Text('Address: $address'),
+                            const SizedBox(height: 4),
+                            Text('Phone: $userPhone'),
+                            const SizedBox(height: 4),
+                            Text('Requested: ${_formatDate(createdAt)}'),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                if (status == 'pending')
+                                  ElevatedButton(
+                                    onPressed: () => _confirmAndUpdate(
+                                      doc.id,
+                                      'accepted',
+                                      'Accept Request',
+                                      'Do you want to accept this request?',
+                                    ),
+                                    child: const Text('Accept'),
+                                  ),
+                                if (status == 'pending')
+                                  ElevatedButton(
+                                    onPressed: () => _confirmAndUpdate(
+                                      doc.id,
+                                      'rejected',
+                                      'Reject Request',
+                                      'Do you want to reject this request?',
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('Reject'),
+                                  ),
+                                if (status == 'accepted')
+                                  ElevatedButton(
+                                    onPressed: () => _confirmAndUpdate(
+                                      doc.id,
+                                      'on_the_way',
+                                      'Mark On The Way',
+                                      'Are you on the way to the customer?',
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('Mark On The Way'),
+                                  ),
+                                if (status == 'accepted' || status == 'on_the_way')
+                                  ElevatedButton(
+                                    onPressed: () => _confirmAndUpdate(
+                                      doc.id,
+                                      'completed',
+                                      'Complete Request',
+                                      'Mark this service as completed?',
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('Complete'),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),

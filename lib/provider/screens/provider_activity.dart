@@ -10,6 +10,8 @@ class ProviderActivity extends StatefulWidget {
 }
 
 class _ProviderActivityState extends State<ProviderActivity> {
+  String selectedFilter = 'all';
+
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
 
@@ -33,6 +35,18 @@ class _ProviderActivityState extends State<ProviderActivity> {
   String _statusLabel(String status) {
     if (status.isEmpty) return 'Unknown';
     return status[0].toUpperCase() + status.substring(1);
+  }
+
+  Widget _filterChip(String key, String label) {
+    final isSelected = selectedFilter == key;
+
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() => selectedFilter = key);
+      },
+    );
   }
 
   @override
@@ -61,7 +75,7 @@ class _ProviderActivityState extends State<ProviderActivity> {
             return Center(child: Text('Error: ${snap.error}'));
           }
 
-          final docs = (snap.data?.docs ?? []).where((doc) {
+          final historyDocs = (snap.data?.docs ?? []).where((doc) {
             final status = (doc.data()['status'] ?? '').toString();
             return status == 'completed' ||
                 status == 'cancelled' ||
@@ -76,71 +90,115 @@ class _ProviderActivityState extends State<ProviderActivity> {
               return 0;
             });
 
-          if (docs.isEmpty) {
-            return const Center(
-              child: Text('No request history yet'),
-            );
-          }
+          final filteredDocs = historyDocs.where((doc) {
+            final status = (doc.data()['status'] ?? '').toString();
+            if (selectedFilter == 'all') return true;
+            return status == selectedFilter;
+          }).toList();
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index].data();
-              final status = (data['status'] ?? '').toString();
-              final userName = data['userName']?.toString() ?? 'User';
-              final serviceType = data['serviceType']?.toString() ?? 'Service';
-              final address = data['serviceAddress']?.toString() ?? '';
-              final updatedAt = data['updatedAt'];
+          final completedCount = historyDocs
+              .where((doc) => (doc.data()['status'] ?? '') == 'completed')
+              .length;
+          final cancelledCount = historyDocs
+              .where((doc) => (doc.data()['status'] ?? '') == 'cancelled')
+              .length;
+          final rejectedCount = historyDocs
+              .where((doc) => (doc.data()['status'] ?? '') == 'rejected')
+              .length;
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              userName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _statusColor(status).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              _statusLabel(status),
-                              style: TextStyle(
-                                color: _statusColor(status),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Service: $serviceType'),
-                      const SizedBox(height: 4),
-                      Text('Address: $address'),
-                      const SizedBox(height: 4),
-                      Text('Updated: ${_formatDate(updatedAt)}'),
-                    ],
-                  ),
+          return Column(
+            children: [
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _filterChip('all', 'All (${historyDocs.length})'),
+                    _filterChip('completed', 'Completed ($completedCount)'),
+                    _filterChip('cancelled', 'Cancelled ($cancelledCount)'),
+                    _filterChip('rejected', 'Rejected ($rejectedCount)'),
+                  ],
                 ),
-              );
-            },
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: filteredDocs.isEmpty
+                    ? const Center(
+                  child: Text('No request history yet'),
+                )
+                    : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final data = filteredDocs[index].data();
+                    final status = (data['status'] ?? '').toString();
+                    final userName = data['userName']?.toString() ?? 'User';
+                    final userPhone = data['userPhone']?.toString() ?? '';
+                    final serviceType = data['serviceType']?.toString() ?? 'Service';
+                    final problem =
+                        data['problemDescription']?.toString() ?? '';
+                    final address = data['serviceAddress']?.toString() ?? '';
+                    final updatedAt = data['updatedAt'];
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    userName,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _statusColor(status)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius:
+                                    BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    _statusLabel(status),
+                                    style: TextStyle(
+                                      color: _statusColor(status),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text('Service: $serviceType'),
+                            const SizedBox(height: 4),
+                            Text('Problem: $problem'),
+                            const SizedBox(height: 4),
+                            Text('Address: $address'),
+                            const SizedBox(height: 4),
+                            Text('Phone: $userPhone'),
+                            const SizedBox(height: 4),
+                            Text('Updated: ${_formatDate(updatedAt)}'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),
