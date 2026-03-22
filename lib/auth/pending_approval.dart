@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'login_screen.dart';
+
 class PendingApprovalScreen extends StatelessWidget {
   const PendingApprovalScreen({super.key});
+
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const MyLogin()),
+          (_) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +36,7 @@ class PendingApprovalScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () async => FirebaseAuth.instance.signOut(),
+                onPressed: () => _logout(context),
                 child: const Text("Logout"),
               )
             ],

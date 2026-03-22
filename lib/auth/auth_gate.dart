@@ -12,6 +12,17 @@ import 'pending_approval.dart';
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
+  bool _hasText(dynamic value) {
+    return value != null && value.toString().trim().isNotEmpty;
+  }
+
+  bool _hasValidPrice(dynamic value) {
+    if (value == null) return false;
+    if (value is num) return value > 0;
+    final parsed = double.tryParse(value.toString());
+    return parsed != null && parsed > 0;
+  }
+
   Future<Widget> _route() async {
     final auth = FirebaseAuth.instance;
     final db = FirebaseFirestore.instance;
@@ -20,6 +31,7 @@ class AuthGate extends StatelessWidget {
     if (user == null) return const MyLogin();
 
     final snap = await db.collection('users').doc(user.uid).get();
+
     if (!snap.exists || snap.data() == null) {
       await auth.signOut();
       return const MyLogin();
@@ -35,15 +47,26 @@ class AuthGate extends StatelessWidget {
       return const BlockedScreen();
     }
 
-    if (role == 'admin') return const AdminDash();
+    if (role == 'admin') {
+      return const AdminDash();
+    }
 
     if (role == 'provider') {
-      if (!approved) return const PendingApprovalScreen();
+      if (!approved) {
+        return const PendingApprovalScreen();
+      }
 
       final setupComplete = (data['setupComplete'] ?? false) == true;
       final serviceType = data['serviceType'];
+      final serviceDescription = data['serviceDescription'];
+      final pricePerHour = data['pricePerHour'];
 
-      if (!setupComplete || serviceType == null) {
+      final profileComplete = setupComplete &&
+          _hasText(serviceType) &&
+          _hasText(serviceDescription) &&
+          _hasValidPrice(pricePerHour);
+
+      if (!profileComplete) {
         return const ProviderSetupScreen();
       }
 
@@ -59,7 +82,9 @@ class AuthGate extends StatelessWidget {
       future: _route(),
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         return snap.data ?? const MyLogin();
       },
@@ -91,6 +116,7 @@ class BlockedScreen extends StatelessWidget {
                 onPressed: () async {
                   await FirebaseAuth.instance.signOut();
                   if (!context.mounted) return;
+
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (_) => const MyLogin()),

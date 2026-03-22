@@ -21,7 +21,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
-  String role = "user"; // user/provider
+  String role = "user";
   bool loading = false;
 
   Future<void> registration() async {
@@ -31,7 +31,11 @@ class _RegisterPageState extends State<RegisterPage> {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
-    if (name.isEmpty || address.isEmpty || phone.isEmpty || email.isEmpty || password.isEmpty) {
+    if (name.isEmpty ||
+        address.isEmpty ||
+        phone.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please fill all fields")),
       );
@@ -54,16 +58,14 @@ class _RegisterPageState extends State<RegisterPage> {
         "phone": phone,
         "email": email,
         "role": role,
-
-        // Providers wait approval, users auto-approved
         "approved": !isProvider,
-
-        // Provider onboarding / setup
-        "setupComplete": !isProvider,     // user true, provider false
-        "serviceType": null,              // provider sets later
-
+        "setupComplete": !isProvider,
+        "serviceType": null,
+        "serviceDescription": null,
+        "pricePerHour": null,
         "blocked": false,
         "createdAt": FieldValue.serverTimestamp(),
+        "updatedAt": FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
@@ -78,7 +80,6 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
       );
 
-      // Go back to login
       await FirebaseAuth.instance.signOut();
       if (!mounted) return;
 
@@ -139,44 +140,57 @@ class _RegisterPageState extends State<RegisterPage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
-
                 DropdownButtonFormField<String>(
                   value: role,
                   items: const [
                     DropdownMenuItem(value: "user", child: Text("User")),
-                    DropdownMenuItem(value: "provider", child: Text("Service Provider")),
+                    DropdownMenuItem(
+                      value: "provider",
+                      child: Text("Service Provider"),
+                    ),
                   ],
                   onChanged: (v) => setState(() => role = v ?? "user"),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.white.withOpacity(0.9),
                     labelText: "Register As",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 _field(nameController, "Enter Your Name"),
                 const SizedBox(height: 12),
                 _field(addressController, "Enter Your Address"),
                 const SizedBox(height: 12),
-                _field(numberController, "Enter Your Contact Number", keyboard: TextInputType.phone),
+                _field(
+                  numberController,
+                  "Enter Your Contact Number",
+                  keyboard: TextInputType.phone,
+                ),
                 const SizedBox(height: 12),
-                _field(emailController, "Enter Your Email", keyboard: TextInputType.emailAddress),
+                _field(
+                  emailController,
+                  "Enter Your Email",
+                  keyboard: TextInputType.emailAddress,
+                ),
                 const SizedBox(height: 12),
                 _field(passwordController, "Enter Your Password", obscure: true),
                 const SizedBox(height: 18),
-
                 SizedBox(
                   width: 180,
                   child: ElevatedButton(
                     onPressed: loading ? null : registration,
                     child: loading
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                         : const Text("Register Account"),
                   ),
                 ),
-
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

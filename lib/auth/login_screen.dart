@@ -14,7 +14,33 @@ class MyLogin extends StatefulWidget {
 class _MyLoginState extends State<MyLogin> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+
   bool loading = false;
+  bool checkingSession = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkSession();
+    });
+  }
+
+  Future<void> _checkSession() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (!mounted) return;
+
+    if (user != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+      );
+    } else {
+      setState(() => checkingSession = false);
+    }
+  }
 
   Future<void> login() async {
     final email = emailController.text.trim();
@@ -37,7 +63,6 @@ class _MyLoginState extends State<MyLogin> {
 
       if (!mounted) return;
 
-      // ✅ after login go to AuthGate (AuthGate will decide role screen)
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const AuthGate()),
@@ -64,6 +89,12 @@ class _MyLoginState extends State<MyLogin> {
 
   @override
   Widget build(BuildContext context) {
+    if (checkingSession) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Container(
       decoration: const BoxDecoration(
         image: DecorationImage(
@@ -115,7 +146,7 @@ class _MyLoginState extends State<MyLogin> {
                             decoration: InputDecoration(
                               hintText: 'Enter Your Email',
                               filled: true,
-                              fillColor: Colors.white.withOpacity(0.9),
+                              fillColor: Colors.white70,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -145,7 +176,7 @@ class _MyLoginState extends State<MyLogin> {
                             decoration: InputDecoration(
                               hintText: 'Enter Your Password',
                               filled: true,
-                              fillColor: Colors.white.withOpacity(0.9),
+                              fillColor: Colors.white70,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -155,55 +186,36 @@ class _MyLoginState extends State<MyLogin> {
                       ],
                     ),
                     const SizedBox(height: 20),
-
                     SizedBox(
                       width: 110,
                       child: ElevatedButton(
                         onPressed: loading ? null : login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white60,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 5,
-                        ),
                         child: loading
                             ? const SizedBox(
                           height: 18,
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                            : const Text(
-                          'Log In',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
+                            : const Text('Log In'),
                       ),
                     ),
                     const SizedBox(height: 30),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
-                          "Don't have an account? ",
-                          style: TextStyle(color: Colors.black, fontSize: 16),
-                        ),
+                        const Text("Don't have an account? "),
                         InkWell(
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const RegisterPage()),
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterPage(),
+                              ),
                             );
                           },
                           child: const Text(
                             "Register Now!",
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         )
                       ],
