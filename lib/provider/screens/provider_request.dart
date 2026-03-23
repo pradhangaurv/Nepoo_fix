@@ -23,6 +23,10 @@ class _ProviderRequestState extends State<ProviderRequest> {
         return Colors.blue;
       case 'on_the_way':
         return Colors.orange;
+      case 'arrived':
+        return Colors.teal;
+      case 'in_progress':
+        return Colors.purple;
       case 'completed':
         return Colors.green;
       case 'rejected':
@@ -38,10 +42,22 @@ class _ProviderRequestState extends State<ProviderRequest> {
     switch (status) {
       case 'on_the_way':
         return 'On The Way';
+      case 'in_progress':
+        return 'In Progress';
+      case 'arrived':
+        return 'Arrived';
       default:
         if (status.isEmpty) return 'Pending';
         return status[0].toUpperCase() + status.substring(1);
     }
+  }
+
+  bool _isActiveStatus(String status) {
+    return status == 'pending' ||
+        status == 'accepted' ||
+        status == 'on_the_way' ||
+        status == 'arrived' ||
+        status == 'in_progress';
   }
 
   Future<void> _updateStatus(String requestId, String status) async {
@@ -213,9 +229,7 @@ class _ProviderRequestState extends State<ProviderRequest> {
 
               final activeDocs = allDocs.where((doc) {
                 final status = (doc.data()['status'] ?? 'pending').toString();
-                return status == 'pending' ||
-                    status == 'accepted' ||
-                    status == 'on_the_way';
+                return _isActiveStatus(status);
               }).toList()
                 ..sort((a, b) {
                   final aTime = a.data()['createdAt'];
@@ -232,8 +246,14 @@ class _ProviderRequestState extends State<ProviderRequest> {
               final acceptedCount = activeDocs
                   .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
                   .length;
-              final onWayCount = activeDocs
-                  .where((doc) => (doc.data()['status'] ?? '') == 'on_the_way')
+              final travelCount = activeDocs
+                  .where((doc) {
+                final status = (doc.data()['status'] ?? '').toString();
+                return status == 'on_the_way' || status == 'arrived';
+              })
+                  .length;
+              final workingCount = activeDocs
+                  .where((doc) => (doc.data()['status'] ?? '') == 'in_progress')
                   .length;
 
               if (activeDocs.isEmpty) {
@@ -247,27 +267,45 @@ class _ProviderRequestState extends State<ProviderRequest> {
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Row(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        _summaryCard(
-                          'Pending',
-                          pendingCount.toString(),
-                          Icons.hourglass_top,
-                          Colors.deepPurple,
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width / 2 - 20,
+                          child: _summaryCard(
+                            'Pending',
+                            pendingCount.toString(),
+                            Icons.hourglass_top,
+                            Colors.deepPurple,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _summaryCard(
-                          'Accepted',
-                          acceptedCount.toString(),
-                          Icons.check_circle_outline,
-                          Colors.blue,
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width / 2 - 20,
+                          child: _summaryCard(
+                            'Accepted',
+                            acceptedCount.toString(),
+                            Icons.check_circle_outline,
+                            Colors.blue,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _summaryCard(
-                          'On The Way',
-                          onWayCount.toString(),
-                          Icons.directions_car,
-                          Colors.orange,
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width / 2 - 20,
+                          child: _summaryCard(
+                            'Traveling',
+                            travelCount.toString(),
+                            Icons.directions_car,
+                            Colors.orange,
+                          ),
+                        ),
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width / 2 - 20,
+                          child: _summaryCard(
+                            'Working',
+                            workingCount.toString(),
+                            Icons.build_circle_outlined,
+                            Colors.purple,
+                          ),
                         ),
                       ],
                     ),
@@ -433,11 +471,37 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                           backgroundColor: Colors.orange,
                                           foregroundColor: Colors.white,
                                         ),
-                                        child:
-                                        const Text('Mark On The Way'),
+                                        child: const Text('Mark On The Way'),
                                       ),
-                                    if (status == 'accepted' ||
-                                        status == 'on_the_way')
+                                    if (status == 'on_the_way')
+                                      ElevatedButton(
+                                        onPressed: () => _confirmAndUpdate(
+                                          doc.id,
+                                          'arrived',
+                                          'Mark Arrived',
+                                          'Have you arrived at the customer location?',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.teal,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Mark Arrived'),
+                                      ),
+                                    if (status == 'arrived')
+                                      ElevatedButton(
+                                        onPressed: () => _confirmAndUpdate(
+                                          doc.id,
+                                          'in_progress',
+                                          'Start Service',
+                                          'Has the service started?',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.purple,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Start Service'),
+                                      ),
+                                    if (status == 'in_progress')
                                       ElevatedButton(
                                         onPressed: () => _confirmAndUpdate(
                                           doc.id,

@@ -55,17 +55,29 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     return days.join(', ');
   }
 
+  Future<bool> _userHasActiveRequest(String userId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('service_requests')
+        .where('userId', isEqualTo: userId)
+        .where(
+      'status',
+      whereIn: [
+        'pending',
+        'accepted',
+        'on_the_way',
+        'arrived',
+        'in_progress',
+      ],
+    )
+        .limit(1)
+        .get();
+
+    return snap.docs.isNotEmpty;
+  }
+
   Future<void> _submitBooking(Map<String, dynamic> providerData) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
-    final isAvailable = (providerData['isAvailable'] ?? true) == true;
-    if (!isAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This provider is currently unavailable')),
-      );
-      return;
-    }
 
     final problem = _problemController.text.trim();
     final address = _addressController.text.trim();
@@ -79,6 +91,20 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
 
     try {
       setState(() => bookingLoading = true);
+
+      final hasActiveRequest = await _userHasActiveRequest(user.uid);
+
+      if (hasActiveRequest) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'You already have an active service request. Please complete or cancel it first.',
+            ),
+          ),
+        );
+        return;
+      }
 
       final userSnap = await FirebaseFirestore.instance
           .collection('users')
@@ -265,12 +291,14 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                         children: [
                           _buildStarRow(averageRating),
                           const SizedBox(width: 12),
-                          Text(
-                            reviewDocs.isEmpty
-                                ? 'No ratings yet'
-                                : '${averageRating.toStringAsFixed(1)} / 5  (${reviewDocs.length} reviews)',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
+                          Expanded(
+                            child: Text(
+                              reviewDocs.isEmpty
+                                  ? 'No ratings yet'
+                                  : '${averageRating.toStringAsFixed(1)} / 5  (${reviewDocs.length} reviews)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -345,20 +373,18 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: bookingLoading || !isAvailable
+                        onPressed: bookingLoading
                             ? null
                             : () => _submitBooking(data),
                         child: bookingLoading
                             ? const SizedBox(
                           height: 18,
                           width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
                         )
-                            : Text(
-                          isAvailable
-                              ? 'Confirm Booking'
-                              : 'Provider Unavailable',
-                        ),
+                            : const Text('Confirm Booking'),
                       ),
                     ),
                     const SizedBox(height: 24),

@@ -187,7 +187,7 @@ class _FindServicesState extends State<FindServices> {
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Text(
-                                      isAvailable ? 'Available' : 'Busy',
+                                      isAvailable ? 'Available Now' : 'On Job',
                                       style: TextStyle(
                                         color: isAvailable
                                             ? Colors.green

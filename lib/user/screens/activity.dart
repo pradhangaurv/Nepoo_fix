@@ -27,6 +27,10 @@ class _ActivityState extends State<Activity> {
         return Colors.blue;
       case 'on_the_way':
         return Colors.orange;
+      case 'arrived':
+        return Colors.teal;
+      case 'in_progress':
+        return Colors.purple;
       case 'completed':
         return Colors.green;
       case 'rejected':
@@ -42,6 +46,10 @@ class _ActivityState extends State<Activity> {
     switch (status) {
       case 'on_the_way':
         return 'On The Way';
+      case 'in_progress':
+        return 'In Progress';
+      case 'arrived':
+        return 'Arrived';
       default:
         if (status.isEmpty) return 'Pending';
         return status[0].toUpperCase() + status.substring(1);
@@ -49,11 +57,17 @@ class _ActivityState extends State<Activity> {
   }
 
   bool _isActiveStatus(String status) {
-    return status == 'pending' || status == 'accepted' || status == 'on_the_way';
+    return status == 'pending' ||
+        status == 'accepted' ||
+        status == 'on_the_way' ||
+        status == 'arrived' ||
+        status == 'in_progress';
   }
 
   bool _canCancel(String status) {
-    return status == 'pending' || status == 'accepted';
+    return status == 'pending' ||
+        status == 'accepted' ||
+        status == 'on_the_way';
   }
 
   Future<void> _cancelRequest(String requestId) async {

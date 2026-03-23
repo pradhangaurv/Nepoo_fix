@@ -33,8 +33,17 @@ class _ProviderActivityState extends State<ProviderActivity> {
   }
 
   String _statusLabel(String status) {
-    if (status.isEmpty) return 'Unknown';
-    return status[0].toUpperCase() + status.substring(1);
+    switch (status) {
+      case 'on_the_way':
+        return 'On The Way';
+      case 'in_progress':
+        return 'In Progress';
+      case 'arrived':
+        return 'Arrived';
+      default:
+        if (status.isEmpty) return 'Unknown';
+        return status[0].toUpperCase() + status.substring(1);
+    }
   }
 
   Widget _filterChip(String key, String label) {
@@ -136,10 +145,12 @@ class _ProviderActivityState extends State<ProviderActivity> {
                     final status = (data['status'] ?? '').toString();
                     final userName = data['userName']?.toString() ?? 'User';
                     final userPhone = data['userPhone']?.toString() ?? '';
-                    final serviceType = data['serviceType']?.toString() ?? 'Service';
+                    final serviceType =
+                        data['serviceType']?.toString() ?? 'Service';
                     final problem =
                         data['problemDescription']?.toString() ?? '';
-                    final address = data['serviceAddress']?.toString() ?? '';
+                    final address =
+                        data['serviceAddress']?.toString() ?? '';
                     final updatedAt = data['updatedAt'];
 
                     return Card(
