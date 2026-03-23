@@ -139,6 +139,20 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     );
   }
 
+  Widget _buildStarRow(double averageRating) {
+    final rounded = averageRating.round();
+
+    return Row(
+      children: List.generate(5, (index) {
+        return Icon(
+          index < rounded ? Icons.star : Icons.star_border,
+          color: Colors.amber,
+          size: 22,
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -150,20 +164,22 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
             .collection('users')
             .doc(widget.providerId)
             .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+        builder: (context, providerSnap) {
+          if (providerSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
+          if (providerSnap.hasError) {
+            return Center(child: Text('Error: ${providerSnap.error}'));
           }
 
-          if (!snap.hasData || !snap.data!.exists || snap.data!.data() == null) {
+          if (!providerSnap.hasData ||
+              !providerSnap.data!.exists ||
+              providerSnap.data!.data() == null) {
             return const Center(child: Text('Provider not found'));
           }
 
-          final data = snap.data!.data()!;
+          final data = providerSnap.data!.data()!;
           final name = data['name']?.toString() ?? 'Unknown';
           final serviceType = data['serviceType']?.toString() ?? 'Not set';
           final description =
@@ -172,70 +188,185 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
           final address = data['address']?.toString() ?? 'No address';
           final price = data['pricePerHour'];
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('reviews')
+                .where('providerId', isEqualTo: widget.providerId)
+                .snapshots(),
+            builder: (context, reviewSnap) {
+              final reviewDocs = reviewSnap.data?.docs ?? [];
+
+              double averageRating = 0;
+              if (reviewDocs.isNotEmpty) {
+                double total = 0;
+                for (final doc in reviewDocs) {
+                  final value = doc.data()['rating'];
+                  if (value is int) {
+                    total += value.toDouble();
+                  } else if (value is double) {
+                    total += value;
+                  } else {
+                    total += double.tryParse(value.toString()) ?? 0;
+                  }
+                }
+                averageRating = total / reviewDocs.length;
+              }
+
+              final recentReviews = [...reviewDocs]
+                ..sort((a, b) {
+                  final aTime = a.data()['createdAt'];
+                  final bTime = b.data()['createdAt'];
+                  if (aTime is Timestamp && bTime is Timestamp) {
+                    return bTime.compareTo(aTime);
+                  }
+                  return 0;
+                });
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildStarRow(averageRating),
+                          const SizedBox(width: 12),
+                          Text(
+                            reviewDocs.isEmpty
+                                ? 'No ratings yet'
+                                : '${averageRating.toStringAsFixed(1)} / 5  (${reviewDocs.length} reviews)',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _infoCard('Service Type', _capitalize(serviceType)),
+                    _infoCard('Description', description),
+                    _infoCard('Price Per Hour', _priceText(price)),
+                    _infoCard('Phone', phone),
+                    _infoCard('Address', address),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Request This Service',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _problemController,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Problem Description',
+                        hintText: 'Describe the service you need',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _addressController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Service Address',
+                        hintText: 'Enter the address for this service',
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: bookingLoading
+                            ? null
+                            : () => _submitBooking(data),
+                        child: bookingLoading
+                            ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                            : const Text('Confirm Booking'),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Recent Reviews',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (reviewDocs.isEmpty)
+                      const Text('No reviews yet')
+                    else
+                      ...recentReviews.take(5).map((doc) {
+                        final review = doc.data();
+                        final userName =
+                            review['userName']?.toString() ?? 'User';
+                        final reviewText =
+                            review['reviewText']?.toString() ?? '';
+                        final ratingValue = review['rating'];
+                        final reviewRating = ratingValue is int
+                            ? ratingValue
+                            : int.tryParse(ratingValue.toString()) ?? 0;
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  userName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: List.generate(5, (index) {
+                                    return Icon(
+                                      index < reviewRating
+                                          ? Icons.star
+                                          : Icons.star_border,
+                                      color: Colors.amber,
+                                      size: 20,
+                                    );
+                                  }),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(reviewText.isEmpty
+                                    ? 'No written review'
+                                    : reviewText),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _infoCard('Service Type', _capitalize(serviceType)),
-                _infoCard('Description', description),
-                _infoCard('Price Per Hour', _priceText(price)),
-                _infoCard('Phone', phone),
-                _infoCard('Address', address),
-                const SizedBox(height: 18),
-                const Text(
-                  'Request This Service',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _problemController,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Problem Description',
-                    hintText: 'Describe the service you need',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _addressController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Service Address',
-                    hintText: 'Enter the address for this service',
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: bookingLoading
-                        ? null
-                        : () => _submitBooking(data),
-                    child: bookingLoading
-                        ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                        : const Text('Confirm Booking'),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),

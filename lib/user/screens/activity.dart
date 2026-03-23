@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'review_page.dart';
+
 class Activity extends StatefulWidget {
   const Activity({super.key});
 
@@ -107,10 +109,30 @@ class _ActivityState extends State<Activity> {
     );
   }
 
+  void _openReviewPage({
+    required String requestId,
+    required String providerId,
+    required String providerName,
+    required String serviceType,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReviewPage(
+          requestId: requestId,
+          providerId: providerId,
+          providerName: providerName,
+          serviceType: serviceType,
+        ),
+      ),
+    );
+  }
+
   Widget _buildRequestCard(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
     final status = (data['status'] ?? 'pending').toString();
     final providerName = data['providerName']?.toString() ?? 'Provider';
+    final providerId = data['providerId']?.toString() ?? '';
     final serviceType = data['serviceType']?.toString() ?? 'Service';
     final problem = data['problemDescription']?.toString() ?? '';
     final address = data['serviceAddress']?.toString() ?? '';
@@ -164,20 +186,32 @@ class _ActivityState extends State<Activity> {
             Text('Requested: ${_formatDate(createdAt)}'),
             const SizedBox(height: 4),
             Text('Last Update: ${_formatDate(updatedAt)}'),
-            if (_canCancel(status)) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: () => _cancelRequest(doc.id),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (_canCancel(status))
+                  ElevatedButton(
+                    onPressed: () => _cancelRequest(doc.id),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Cancel Request'),
                   ),
-                  child: const Text('Cancel Request'),
-                ),
-              ),
-            ],
+                if (status == 'completed' && providerId.isNotEmpty)
+                  ElevatedButton(
+                    onPressed: () => _openReviewPage(
+                      requestId: doc.id,
+                      providerId: providerId,
+                      providerName: providerName,
+                      serviceType: serviceType,
+                    ),
+                    child: const Text('Rate & Review'),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
