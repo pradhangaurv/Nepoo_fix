@@ -45,18 +45,71 @@ class _ProviderRequestState extends State<ProviderRequest> {
   }
 
   Future<void> _updateStatus(String requestId, String status) async {
-    await FirebaseFirestore.instance
-        .collection('service_requests')
-        .doc(requestId)
-        .update({
-      'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final provider = FirebaseAuth.instance.currentUser;
+    if (provider == null) return;
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Request marked as ${_statusLabel(status)}')),
-    );
+    final db = FirebaseFirestore.instance;
+    final requestRef = db.collection('service_requests').doc(requestId);
+    final providerRef = db.collection('users').doc(provider.uid);
+
+    try {
+      await db.runTransaction((transaction) async {
+        final providerSnap = await transaction.get(providerRef);
+        final providerData = providerSnap.data() ?? <String, dynamic>{};
+
+        final currentRequestId =
+        providerData['currentRequestId']?.toString();
+
+        transaction.update(requestRef, {
+          'status': status,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (status == 'accepted') {
+          if (currentRequestId != null &&
+              currentRequestId.isNotEmpty &&
+              currentRequestId != requestId) {
+            throw Exception('You already have an active request.');
+          }
+
+          transaction.update(providerRef, {
+            'isAvailable': false,
+            'currentRequestId': requestId,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        if (status == 'completed') {
+          if (currentRequestId == requestId || currentRequestId == null) {
+            transaction.update(providerRef, {
+              'isAvailable': true,
+              'currentRequestId': null,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
+        if (status == 'rejected' || status == 'cancelled') {
+          if (currentRequestId == requestId) {
+            transaction.update(providerRef, {
+              'isAvailable': true,
+              'currentRequestId': null,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Request marked as ${_statusLabel(status)}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update request: $e')),
+      );
+    }
   }
 
   Future<void> _confirmAndUpdate(
@@ -128,218 +181,291 @@ class _ProviderRequestState extends State<ProviderRequest> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Incoming Requests')),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('service_requests')
-            .where('providerId', isEqualTo: user.uid)
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots(),
+      builder: (context, providerSnap) {
+        final providerData = providerSnap.data?.data() ?? <String, dynamic>{};
+        final currentRequestId =
+            providerData['currentRequestId']?.toString() ?? '';
+        final isAvailable = (providerData['isAvailable'] ?? true) == true;
+        final hasActiveAssignedRequest = currentRequestId.isNotEmpty;
 
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
-
-          final allDocs = snap.data?.docs ?? [];
-
-          final activeDocs = allDocs.where((doc) {
-            final status = (doc.data()['status'] ?? 'pending').toString();
-            return status == 'pending' ||
-                status == 'accepted' ||
-                status == 'on_the_way';
-          }).toList()
-            ..sort((a, b) {
-              final aTime = a.data()['createdAt'];
-              final bTime = b.data()['createdAt'];
-              if (aTime is Timestamp && bTime is Timestamp) {
-                return bTime.compareTo(aTime);
+        return Scaffold(
+          appBar: AppBar(title: const Text('Incoming Requests')),
+          body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('service_requests')
+                .where('providerId', isEqualTo: user.uid)
+                .snapshots(),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
-              return 0;
-            });
 
-          final pendingCount = activeDocs
-              .where((doc) => (doc.data()['status'] ?? '') == 'pending')
-              .length;
-          final acceptedCount = activeDocs
-              .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
-              .length;
-          final onWayCount = activeDocs
-              .where((doc) => (doc.data()['status'] ?? '') == 'on_the_way')
-              .length;
+              if (snap.hasError) {
+                return Center(child: Text('Error: ${snap.error}'));
+              }
 
-          if (activeDocs.isEmpty) {
-            return const Center(
-              child: Text('No active requests right now'),
-            );
-          }
+              final allDocs = snap.data?.docs ?? [];
 
-          return Column(
-            children: [
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    _summaryCard(
-                      'Pending',
-                      pendingCount.toString(),
-                      Icons.hourglass_top,
-                      Colors.deepPurple,
+              final activeDocs = allDocs.where((doc) {
+                final status = (doc.data()['status'] ?? 'pending').toString();
+                return status == 'pending' ||
+                    status == 'accepted' ||
+                    status == 'on_the_way';
+              }).toList()
+                ..sort((a, b) {
+                  final aTime = a.data()['createdAt'];
+                  final bTime = b.data()['createdAt'];
+                  if (aTime is Timestamp && bTime is Timestamp) {
+                    return bTime.compareTo(aTime);
+                  }
+                  return 0;
+                });
+
+              final pendingCount = activeDocs
+                  .where((doc) => (doc.data()['status'] ?? '') == 'pending')
+                  .length;
+              final acceptedCount = activeDocs
+                  .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
+                  .length;
+              final onWayCount = activeDocs
+                  .where((doc) => (doc.data()['status'] ?? '') == 'on_the_way')
+                  .length;
+
+              if (activeDocs.isEmpty) {
+                return const Center(
+                  child: Text('No active requests right now'),
+                );
+              }
+
+              return Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        _summaryCard(
+                          'Pending',
+                          pendingCount.toString(),
+                          Icons.hourglass_top,
+                          Colors.deepPurple,
+                        ),
+                        const SizedBox(width: 8),
+                        _summaryCard(
+                          'Accepted',
+                          acceptedCount.toString(),
+                          Icons.check_circle_outline,
+                          Colors.blue,
+                        ),
+                        const SizedBox(width: 8),
+                        _summaryCard(
+                          'On The Way',
+                          onWayCount.toString(),
+                          Icons.directions_car,
+                          Colors.orange,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    _summaryCard(
-                      'Accepted',
-                      acceptedCount.toString(),
-                      Icons.check_circle_outline,
-                      Colors.blue,
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isAvailable
+                            ? Colors.green.withValues(alpha: 0.10)
+                            : Colors.red.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isAvailable ? Icons.check_circle : Icons.work,
+                            color: isAvailable ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              isAvailable
+                                  ? 'You are currently available for new requests.'
+                                  : 'You are busy with an active request. Complete it before accepting another one.',
+                              style: TextStyle(
+                                color: isAvailable ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    _summaryCard(
-                      'On The Way',
-                      onWayCount.toString(),
-                      Icons.directions_car,
-                      Colors.orange,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: activeDocs.length,
-                  itemBuilder: (context, index) {
-                    final doc = activeDocs[index];
-                    final data = doc.data();
-                    final status = (data['status'] ?? 'pending').toString();
-                    final userName = data['userName']?.toString() ?? 'User';
-                    final userPhone = data['userPhone']?.toString() ?? '';
-                    final serviceType = data['serviceType']?.toString() ?? 'Service';
-                    final problem = data['problemDescription']?.toString() ?? '';
-                    final address = data['serviceAddress']?.toString() ?? '';
-                    final createdAt = data['createdAt'];
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: activeDocs.length,
+                      itemBuilder: (context, index) {
+                        final doc = activeDocs[index];
+                        final data = doc.data();
+                        final status = (data['status'] ?? 'pending').toString();
+                        final userName = data['userName']?.toString() ?? 'User';
+                        final userPhone = data['userPhone']?.toString() ?? '';
+                        final serviceType =
+                            data['serviceType']?.toString() ?? 'Service';
+                        final problem =
+                            data['problemDescription']?.toString() ?? '';
+                        final address =
+                            data['serviceAddress']?.toString() ?? '';
+                        final createdAt = data['createdAt'];
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                        final isCurrentAssignedRequest =
+                            currentRequestId == doc.id;
+                        final canAcceptThisRequest =
+                            !hasActiveAssignedRequest || isCurrentAssignedRequest;
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    userName,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        userName,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _statusColor(status)
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        _statusLabel(status),
+                                        style: TextStyle(
+                                          color: _statusColor(status),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _statusColor(status).withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    _statusLabel(status),
+                                const SizedBox(height: 8),
+                                Text('Service: $serviceType'),
+                                const SizedBox(height: 4),
+                                Text('Problem: $problem'),
+                                const SizedBox(height: 4),
+                                Text('Address: $address'),
+                                const SizedBox(height: 4),
+                                Text('Phone: $userPhone'),
+                                const SizedBox(height: 4),
+                                Text('Requested: ${_formatDate(createdAt)}'),
+                                if (status == 'pending' &&
+                                    hasActiveAssignedRequest &&
+                                    !isCurrentAssignedRequest) ...[
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Finish your current accepted job before accepting another request.',
                                     style: TextStyle(
-                                      color: _statusColor(status),
+                                      color: Colors.red,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                ],
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [
+                                    if (status == 'pending')
+                                      ElevatedButton(
+                                        onPressed: canAcceptThisRequest
+                                            ? () => _confirmAndUpdate(
+                                          doc.id,
+                                          'accepted',
+                                          'Accept Request',
+                                          'Do you want to accept this request? You will become unavailable to other users.',
+                                        )
+                                            : null,
+                                        child: const Text('Accept'),
+                                      ),
+                                    if (status == 'pending')
+                                      ElevatedButton(
+                                        onPressed: () => _confirmAndUpdate(
+                                          doc.id,
+                                          'rejected',
+                                          'Reject Request',
+                                          'Do you want to reject this request?',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Reject'),
+                                      ),
+                                    if (status == 'accepted')
+                                      ElevatedButton(
+                                        onPressed: () => _confirmAndUpdate(
+                                          doc.id,
+                                          'on_the_way',
+                                          'Mark On The Way',
+                                          'Are you on the way to the customer?',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.orange,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child:
+                                        const Text('Mark On The Way'),
+                                      ),
+                                    if (status == 'accepted' ||
+                                        status == 'on_the_way')
+                                      ElevatedButton(
+                                        onPressed: () => _confirmAndUpdate(
+                                          doc.id,
+                                          'completed',
+                                          'Complete Request',
+                                          'Mark this service as completed? You will become available again.',
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Complete'),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text('Service: $serviceType'),
-                            const SizedBox(height: 4),
-                            Text('Problem: $problem'),
-                            const SizedBox(height: 4),
-                            Text('Address: $address'),
-                            const SizedBox(height: 4),
-                            Text('Phone: $userPhone'),
-                            const SizedBox(height: 4),
-                            Text('Requested: ${_formatDate(createdAt)}'),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: [
-                                if (status == 'pending')
-                                  ElevatedButton(
-                                    onPressed: () => _confirmAndUpdate(
-                                      doc.id,
-                                      'accepted',
-                                      'Accept Request',
-                                      'Do you want to accept this request?',
-                                    ),
-                                    child: const Text('Accept'),
-                                  ),
-                                if (status == 'pending')
-                                  ElevatedButton(
-                                    onPressed: () => _confirmAndUpdate(
-                                      doc.id,
-                                      'rejected',
-                                      'Reject Request',
-                                      'Do you want to reject this request?',
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Text('Reject'),
-                                  ),
-                                if (status == 'accepted')
-                                  ElevatedButton(
-                                    onPressed: () => _confirmAndUpdate(
-                                      doc.id,
-                                      'on_the_way',
-                                      'Mark On The Way',
-                                      'Are you on the way to the customer?',
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Text('Mark On The Way'),
-                                  ),
-                                if (status == 'accepted' || status == 'on_the_way')
-                                  ElevatedButton(
-                                    onPressed: () => _confirmAndUpdate(
-                                      doc.id,
-                                      'completed',
-                                      'Complete Request',
-                                      'Mark this service as completed?',
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    child: const Text('Complete'),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

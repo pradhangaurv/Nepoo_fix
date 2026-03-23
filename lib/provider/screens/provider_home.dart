@@ -2,8 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import 'provider_setup.dart';
-
 class ProviderHome extends StatefulWidget {
   const ProviderHome({super.key});
 
@@ -30,6 +28,11 @@ class _ProviderHomeState extends State<ProviderHome> {
         : "Rs ${parsed.toStringAsFixed(2)} / hour";
   }
 
+  String _daysText(List<String> days) {
+    if (days.isEmpty) return "Not set";
+    return days.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -41,7 +44,9 @@ class _ProviderHomeState extends State<ProviderHome> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Provider Home")),
+      appBar: AppBar(
+        title: const Text("Provider Home"),
+      ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -63,6 +68,12 @@ class _ProviderHomeState extends State<ProviderHome> {
               data["serviceDescription"]?.toString() ?? "No description added";
           final price = data["pricePerHour"];
           final approved = (data["approved"] ?? false) == true;
+          final isAvailable = (data["isAvailable"] ?? true) == true;
+          final availableDays = ((data["availableDays"] ?? []) as List)
+              .map((e) => e.toString())
+              .toList();
+          final startHour = data["startHour"]?.toString() ?? "Not set";
+          final endHour = data["endHour"]?.toString() ?? "Not set";
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -98,24 +109,14 @@ class _ProviderHomeState extends State<ProviderHome> {
                         Text("Price: ${_priceText(price)}"),
                         const SizedBox(height: 8),
                         Text("Approval Status: ${approved ? "Approved" : "Pending"}"),
+                        const SizedBox(height: 8),
+                        Text("Availability: ${isAvailable ? "Available" : "Unavailable"}"),
+                        const SizedBox(height: 8),
+                        Text("Available Days: ${_daysText(availableDays)}"),
+                        const SizedBox(height: 8),
+                        Text("Working Hours: $startHour - $endHour"),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProviderSetupScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.edit),
-                    label: const Text("Edit Service Profile"),
                   ),
                 ),
               ],

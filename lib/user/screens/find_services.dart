@@ -43,6 +43,11 @@ class _FindServicesState extends State<FindServices> {
     return text[0].toUpperCase() + text.substring(1);
   }
 
+  String _daysText(List<String> days) {
+    if (days.isEmpty) return 'Not set';
+    return days.join(', ');
+  }
+
   void _openProviderDetails(String providerId) {
     Navigator.push(
       context,
@@ -110,7 +115,19 @@ class _FindServicesState extends State<FindServices> {
                       !blocked &&
                       setupComplete &&
                       serviceType == selectedType;
-                }).toList();
+                }).toList()
+                  ..sort((a, b) {
+                    final aAvailable = (a.data()['isAvailable'] ?? true) == true;
+                    final bAvailable = (b.data()['isAvailable'] ?? true) == true;
+
+                    if (aAvailable == bAvailable) {
+                      final aName = (a.data()['name'] ?? '').toString();
+                      final bName = (b.data()['name'] ?? '').toString();
+                      return aName.compareTo(bName);
+                    }
+
+                    return aAvailable ? -1 : 1;
+                  });
 
                 if (docs.isEmpty) {
                   return const Center(
@@ -124,11 +141,18 @@ class _FindServicesState extends State<FindServices> {
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     final data = doc.data();
+
                     final name = data['name']?.toString() ?? 'Unknown';
                     final description = data['serviceDescription']?.toString() ??
                         'No description available';
                     final price = data['pricePerHour'];
                     final phone = data['phone']?.toString() ?? 'No phone';
+                    final isAvailable = (data['isAvailable'] ?? true) == true;
+                    final availableDays = ((data['availableDays'] ?? []) as List)
+                        .map((e) => e.toString())
+                        .toList();
+                    final startHour = data['startHour']?.toString() ?? 'Not set';
+                    final endHour = data['endHour']?.toString() ?? 'Not set';
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -140,12 +164,39 @@ class _FindServicesState extends State<FindServices> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                name,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isAvailable
+                                          ? Colors.green.withValues(alpha: 0.10)
+                                          : Colors.red.withValues(alpha: 0.10),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      isAvailable ? 'Available' : 'Busy',
+                                      style: TextStyle(
+                                        color: isAvailable
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 6),
                               Text(
@@ -167,6 +218,10 @@ class _FindServicesState extends State<FindServices> {
                               ),
                               const SizedBox(height: 8),
                               Text('Phone: $phone'),
+                              const SizedBox(height: 4),
+                              Text('Days: ${_daysText(availableDays)}'),
+                              const SizedBox(height: 4),
+                              Text('Hours: $startHour - $endHour'),
                               const SizedBox(height: 10),
                               Align(
                                 alignment: Alignment.centerRight,

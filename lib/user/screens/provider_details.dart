@@ -50,9 +50,22 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     return text[0].toUpperCase() + text.substring(1);
   }
 
+  String _daysText(List<String> days) {
+    if (days.isEmpty) return 'Not set';
+    return days.join(', ');
+  }
+
   Future<void> _submitBooking(Map<String, dynamic> providerData) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    final isAvailable = (providerData['isAvailable'] ?? true) == true;
+    if (!isAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This provider is currently unavailable')),
+      );
+      return;
+    }
 
     final problem = _problemController.text.trim();
     final address = _addressController.text.trim();
@@ -188,6 +201,13 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
           final address = data['address']?.toString() ?? 'No address';
           final price = data['pricePerHour'];
 
+          final isAvailable = (data['isAvailable'] ?? true) == true;
+          final availableDays = ((data['availableDays'] ?? []) as List)
+              .map((e) => e.toString())
+              .toList();
+          final startHour = data['startHour']?.toString() ?? 'Not set';
+          final endHour = data['endHour']?.toString() ?? 'Not set';
+
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('reviews')
@@ -257,11 +277,42 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isAvailable
+                            ? Colors.green.withValues(alpha: 0.10)
+                            : Colors.red.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isAvailable ? Icons.check_circle : Icons.cancel,
+                            color: isAvailable ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            isAvailable
+                                ? 'Currently Available'
+                                : 'Currently Unavailable',
+                            style: TextStyle(
+                              color: isAvailable ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     _infoCard('Service Type', _capitalize(serviceType)),
                     _infoCard('Description', description),
                     _infoCard('Price Per Hour', _priceText(price)),
                     _infoCard('Phone', phone),
                     _infoCard('Address', address),
+                    _infoCard('Available Days', _daysText(availableDays)),
+                    _infoCard('Working Hours', '$startHour - $endHour'),
                     const SizedBox(height: 18),
                     const Text(
                       'Request This Service',
@@ -294,7 +345,7 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: bookingLoading
+                        onPressed: bookingLoading || !isAvailable
                             ? null
                             : () => _submitBooking(data),
                         child: bookingLoading
@@ -303,7 +354,11 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                            : const Text('Confirm Booking'),
+                            : Text(
+                          isAvailable
+                              ? 'Confirm Booking'
+                              : 'Provider Unavailable',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -355,9 +410,11 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                                   }),
                                 ),
                                 const SizedBox(height: 8),
-                                Text(reviewText.isEmpty
-                                    ? 'No written review'
-                                    : reviewText),
+                                Text(
+                                  reviewText.isEmpty
+                                      ? 'No written review'
+                                      : reviewText,
+                                ),
                               ],
                             ),
                           ),

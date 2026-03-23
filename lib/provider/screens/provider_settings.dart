@@ -1,7 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../auth/login_screen.dart';
+import 'provider_setup.dart';
 
 class ProviderSettings extends StatefulWidget {
   const ProviderSettings({super.key});
@@ -11,6 +13,126 @@ class ProviderSettings extends StatefulWidget {
 }
 
 class _ProviderSettingsState extends State<ProviderSettings> {
+  bool loading = true;
+  bool saving = false;
+
+  bool isAvailable = true;
+  List<String> selectedDays = [];
+  String startHour = '09:00 AM';
+  String endHour = '06:00 PM';
+
+  final List<String> allDays = const [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvailability();
+  }
+
+  Future<void> _loadAvailability() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = snap.data() ?? <String, dynamic>{};
+
+      setState(() {
+        isAvailable = (data['isAvailable'] ?? true) == true;
+        selectedDays = ((data['availableDays'] ?? []) as List)
+            .map((e) => e.toString())
+            .toList();
+        startHour = data['startHour']?.toString() ?? '09:00 AM';
+        endHour = data['endHour']?.toString() ?? '06:00 PM';
+        loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load settings: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  Future<void> _pickTime({
+    required bool isStart,
+  }) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      if (isStart) {
+        startHour = _formatTime(picked);
+      } else {
+        endHour = _formatTime(picked);
+      }
+    });
+  }
+
+  Future<void> _saveAvailability() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (selectedDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one available day')),
+      );
+      return;
+    }
+
+    try {
+      setState(() => saving = true);
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'isAvailable': isAvailable,
+        'availableDays': selectedDays,
+        'startHour': startHour,
+        'endHour': endHour,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Availability updated successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save settings: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
 
   Future<void> _logout() async {
     await FirebaseAuth.instance.signOut();
@@ -23,23 +145,142 @@ class _ProviderSettingsState extends State<ProviderSettings> {
     );
   }
 
+  Widget _dayChip(String day) {
+    final selected = selectedDays.contains(day);
+
+    return FilterChip(
+      label: Text(day),
+      selected: selected,
+      onSelected: (value) {
+        setState(() {
+          if (value) {
+            selectedDays.add(day);
+          } else {
+            selectedDays.remove(day);
+          }
+        });
+      },
+    );
+  }
+
+  Widget _timeTile({
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      child: ListTile(
+        title: Text(title),
+        subtitle: Text(value),
+        trailing: const Icon(Icons.access_time),
+        onTap: onTap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Settings"),
+        title: const Text("Provider Settings"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
+            icon: const Icon(Icons.edit),
+            tooltip: "Edit Profile",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProviderSetupScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
-      body: Center(
-        child: ElevatedButton.icon(
-          onPressed: _logout,
-          icon: const Icon(Icons.logout),
-          label: const Text("Logout"),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              value: isAvailable,
+              title: const Text(
+                'Currently Available',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                isAvailable
+                    ? 'Users can request your service'
+                    : 'Users cannot book you right now',
+              ),
+              onChanged: (value) {
+                setState(() => isAvailable = value);
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Available Days',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: allDays.map(_dayChip).toList(),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Working Hours',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _timeTile(
+              title: 'Start Time',
+              value: startHour,
+              onTap: () => _pickTime(isStart: true),
+            ),
+            _timeTile(
+              title: 'End Time',
+              value: endHour,
+              onTap: () => _pickTime(isStart: false),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: saving ? null : _saveAvailability,
+                child: saving
+                    ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Text('Save Availability'),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _logout,
+                icon: const Icon(Icons.logout),
+                label: const Text("Logout"),
+              ),
+            ),
+          ],
         ),
       ),
     );
