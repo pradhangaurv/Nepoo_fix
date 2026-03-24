@@ -18,6 +18,9 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
 
   final descriptionController = TextEditingController();
   final priceController = TextEditingController();
+  final locationAddressController = TextEditingController();
+  final latitudeController = TextEditingController();
+  final longitudeController = TextEditingController();
 
   final services = const [
     ("plumber", "Plumber"),
@@ -48,9 +51,19 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
 
     setState(() {
       serviceType = data["serviceType"]?.toString();
-      descriptionController.text = data["serviceDescription"]?.toString() ?? "";
+      descriptionController.text =
+          data["serviceDescription"]?.toString() ?? "";
+      locationAddressController.text =
+          data["locationAddress"]?.toString() ?? "";
+
       final price = data["pricePerHour"];
       priceController.text = price == null ? "" : price.toString();
+
+      final lat = data["latitude"];
+      latitudeController.text = lat == null ? "" : lat.toString();
+
+      final lng = data["longitude"];
+      longitudeController.text = lng == null ? "" : lng.toString();
     });
   }
 
@@ -59,7 +72,15 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
     if (user == null) return;
 
     final description = descriptionController.text.trim();
+    final locationAddress = locationAddressController.text.trim();
     final price = double.tryParse(priceController.text.trim());
+    final latitudeText = latitudeController.text.trim();
+    final longitudeText = longitudeController.text.trim();
+
+    final latitude =
+    latitudeText.isEmpty ? null : double.tryParse(latitudeText);
+    final longitude =
+    longitudeText.isEmpty ? null : double.tryParse(longitudeText);
 
     if (serviceType == null || serviceType!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -82,6 +103,27 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
       return;
     }
 
+    if (locationAddress.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter your service location address")),
+      );
+      return;
+    }
+
+    if (latitudeText.isNotEmpty && latitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid latitude")),
+      );
+      return;
+    }
+
+    if (longitudeText.isNotEmpty && longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid longitude")),
+      );
+      return;
+    }
+
     try {
       setState(() => saving = true);
 
@@ -89,6 +131,9 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
         "serviceType": serviceType,
         "serviceDescription": description,
         "pricePerHour": price,
+        "locationAddress": locationAddress,
+        "latitude": latitude,
+        "longitude": longitude,
         "setupComplete": true,
         "updatedAt": FieldValue.serverTimestamp(),
       });
@@ -123,7 +168,29 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
   void dispose() {
     descriptionController.dispose();
     priceController.dispose();
+    locationAddressController.dispose();
+    latitudeController.dispose();
+    longitudeController.dispose();
     super.dispose();
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        labelText: label,
+        hintText: hint,
+      ),
+    );
   }
 
   @override
@@ -159,23 +226,47 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
+            _field(
               controller: descriptionController,
+              label: "Service Description",
+              hint:
+              "Example: Home cleaning, kitchen cleaning, bathroom cleaning",
               maxLines: 4,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: "Service Description",
-                hintText: "Example: Home cleaning, kitchen cleaning, bathroom cleaning",
-              ),
             ),
             const SizedBox(height: 16),
-            TextField(
+            _field(
               controller: priceController,
+              label: "Price Per Hour",
+              hint: "Example: 500",
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: "Price Per Hour",
-                hintText: "Example: 500",
+            ),
+            const SizedBox(height: 16),
+            _field(
+              controller: locationAddressController,
+              label: "Service Location Address",
+              hint: "Example: Baneshwor, Kathmandu",
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            _field(
+              controller: latitudeController,
+              label: "Latitude (optional for now)",
+              hint: "Example: 27.7172",
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 16),
+            _field(
+              controller: longitudeController,
+              label: "Longitude (optional for now)",
+              hint: "Example: 85.3240",
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 10),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "You can leave latitude and longitude empty for now. Later we can add Google Maps or current location.",
+                style: TextStyle(color: Colors.blueGrey),
               ),
             ),
             const SizedBox(height: 20),

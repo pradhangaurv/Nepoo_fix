@@ -7,12 +7,11 @@ plugins {
 
 android {
     namespace = "com.example.nepoo_fix"
-    compileSdk = 34
-
+    compileSdk = flutter.compileSdkVersion
     defaultConfig {
         applicationId = "com.example.nepoo_fix"
         minSdk = 23
-        targetSdk = 34
+        targetSdk = flutter.targetSdkVersion
         versionCode = 1
         versionName = "1.0"
     }

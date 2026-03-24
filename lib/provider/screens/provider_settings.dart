@@ -21,6 +21,13 @@ class _ProviderSettingsState extends State<ProviderSettings> {
   String startHour = '09:00 AM';
   String endHour = '06:00 PM';
 
+  String serviceType = '';
+  String serviceDescription = '';
+  String locationAddress = '';
+  dynamic pricePerHour;
+  dynamic latitude;
+  dynamic longitude;
+
   final List<String> allDays = const [
     'Sunday',
     'Monday',
@@ -59,6 +66,14 @@ class _ProviderSettingsState extends State<ProviderSettings> {
             .toList();
         startHour = data['startHour']?.toString() ?? '09:00 AM';
         endHour = data['endHour']?.toString() ?? '06:00 PM';
+
+        serviceType = data['serviceType']?.toString() ?? '';
+        serviceDescription = data['serviceDescription']?.toString() ?? '';
+        locationAddress = data['locationAddress']?.toString() ?? '';
+        pricePerHour = data['pricePerHour'];
+        latitude = data['latitude'];
+        longitude = data['longitude'];
+
         loading = false;
       });
     } catch (e) {
@@ -69,6 +84,29 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         );
       }
     }
+  }
+
+  String _priceText(dynamic value) {
+    if (value == null) return 'Not set';
+
+    if (value is int) return 'Rs $value/hour';
+    if (value is double) {
+      return value % 1 == 0
+          ? 'Rs ${value.toInt()}/hour'
+          : 'Rs ${value.toStringAsFixed(2)}/hour';
+    }
+
+    final parsed = double.tryParse(value.toString());
+    if (parsed == null) return 'Not set';
+
+    return parsed % 1 == 0
+        ? 'Rs ${parsed.toInt()}/hour'
+        : 'Rs ${parsed.toStringAsFixed(2)}/hour';
+  }
+
+  String _coordinateText(dynamic value) {
+    if (value == null) return 'Not set';
+    return value.toString();
   }
 
   String _formatTime(TimeOfDay time) {
@@ -178,6 +216,15 @@ class _ProviderSettingsState extends State<ProviderSettings> {
     );
   }
 
+  Widget _infoTile(String title, String value) {
+    return Card(
+      child: ListTile(
+        title: Text(title),
+        subtitle: Text(value),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -193,13 +240,14 @@ class _ProviderSettingsState extends State<ProviderSettings> {
           IconButton(
             icon: const Icon(Icons.edit),
             tooltip: "Edit Profile",
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const ProviderSetupScreen(),
                 ),
               );
+              _loadAvailability();
             },
           ),
         ],
@@ -209,6 +257,27 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text(
+              'Service Profile',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _infoTile('Service Type', serviceType.isEmpty ? 'Not set' : serviceType),
+            _infoTile(
+              'Description',
+              serviceDescription.isEmpty ? 'Not set' : serviceDescription,
+            ),
+            _infoTile('Price Per Hour', _priceText(pricePerHour)),
+            _infoTile(
+              'Location Address',
+              locationAddress.isEmpty ? 'Not set' : locationAddress,
+            ),
+            _infoTile('Latitude', _coordinateText(latitude)),
+            _infoTile('Longitude', _coordinateText(longitude)),
+            const SizedBox(height: 20),
             SwitchListTile(
               value: isAvailable,
               title: const Text(
