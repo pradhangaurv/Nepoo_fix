@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+
+import 'activity.dart';
+import 'select_location_map.dart';
 
 class ProviderDetailsPage extends StatefulWidget {
   final String providerId;
@@ -19,6 +23,9 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
   final TextEditingController _addressController = TextEditingController();
 
   bool bookingLoading = false;
+
+  double? serviceLatitude;
+  double? serviceLongitude;
 
   @override
   void dispose() {
@@ -55,6 +62,11 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     return days.join(', ');
   }
 
+  String _coordinateText(double? value) {
+    if (value == null) return 'Not selected';
+    return value.toStringAsFixed(6);
+  }
+
   Future<bool> _userHasActiveRequest(String userId) async {
     final snap = await FirebaseFirestore.instance
         .collection('service_requests')
@@ -75,6 +87,80 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     return snap.docs.isNotEmpty;
   }
 
+  Future<void> _pickServiceLocationOnMap() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SelectLocationMapPage(),
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    final latValue = result['latitude'];
+    final lngValue = result['longitude'];
+
+    final pickedLat = latValue is num
+        ? latValue.toDouble()
+        : double.tryParse('$latValue');
+
+    final pickedLng = lngValue is num
+        ? lngValue.toDouble()
+        : double.tryParse('$lngValue');
+
+    if (pickedLat == null || pickedLng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid location selected')),
+      );
+      return;
+    }
+
+    String resolvedAddress = 'Selected on map';
+
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        pickedLat,
+        pickedLng,
+      );
+
+      if (!mounted) return;
+
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+
+        final parts = [
+          p.street,
+          p.subLocality,
+          p.locality,
+          p.administrativeArea,
+          p.country,
+        ]
+            .where((e) => e != null && e.trim().isNotEmpty)
+            .map((e) => e!.trim())
+            .toList();
+
+        if (parts.isNotEmpty) {
+          resolvedAddress = parts.join(', ');
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+      resolvedAddress = 'Selected on map';
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      serviceLatitude = pickedLat;
+      serviceLongitude = pickedLng;
+      _addressController.text = resolvedAddress;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Service location selected')),
+    );
+  }
+
   Future<void> _submitBooking(Map<String, dynamic> providerData) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -82,9 +168,23 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     final problem = _problemController.text.trim();
     final address = _addressController.text.trim();
 
-    if (problem.isEmpty || address.isEmpty) {
+    if (problem.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all booking fields')),
+        const SnackBar(content: Text('Please enter the problem description')),
+      );
+      return;
+    }
+
+    if (address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please pick the service location on map')),
+      );
+      return;
+    }
+
+    if (serviceLatitude == null || serviceLongitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please pick the service location on map')),
       );
       return;
     }
@@ -94,8 +194,9 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
 
       final hasActiveRequest = await _userHasActiveRequest(user.uid);
 
+      if (!mounted) return;
+
       if (hasActiveRequest) {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -110,6 +211,8 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
           .collection('users')
           .doc(user.uid)
           .get();
+
+      if (!mounted) return;
 
       final userData = userSnap.data() ?? <String, dynamic>{};
 
@@ -127,28 +230,40 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
         'pricePerHour': providerData['pricePerHour'],
         'problemDescription': problem,
         'serviceAddress': address,
+        'serviceLatitude': serviceLatitude,
+        'serviceLongitude': serviceLongitude,
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      if (!mounted) return;
+
       _problemController.clear();
       _addressController.clear();
 
-      if (!mounted) return;
+      setState(() {
+        serviceLatitude = null;
+        serviceLongitude = null;
+        bookingLoading = false;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Service request sent successfully')),
       );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const Activity()),
+      );
     } catch (e) {
       if (!mounted) return;
+
+      setState(() => bookingLoading = false);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Booking failed: $e')),
       );
-    } finally {
-      if (mounted) {
-        setState(() => bookingLoading = false);
-      }
     }
   }
 
@@ -366,25 +481,50 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         labelText: 'Service Address',
-                        hintText: 'Enter the address for this service',
+                        hintText: 'This will auto-fill from map',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.location_on),
+                        title: const Text('Selected Service Location'),
+                        subtitle: Text(
+                          'Lat: ${_coordinateText(serviceLatitude)}\nLng: ${_coordinateText(serviceLongitude)}',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _pickServiceLocationOnMap,
+                        icon: const Icon(Icons.map),
+                        label: Text(
+                          serviceLatitude != null && serviceLongitude != null
+                              ? 'Update Service Location on Map'
+                              : 'Pick Service Location on Map',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: bookingLoading
+                        onPressed: bookingLoading || !isAvailable
                             ? null
                             : () => _submitBooking(data),
                         child: bookingLoading
                             ? const SizedBox(
                           height: 18,
                           width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                            : const Text('Confirm Booking'),
+                            : Text(
+                          isAvailable
+                              ? 'Confirm Booking'
+                              : 'Provider Unavailable',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),

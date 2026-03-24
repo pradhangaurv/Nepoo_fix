@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../auth/login_screen.dart';
+import '../../user/screens/select_location_map.dart';
 import 'provider_setup.dart';
 
 class ProviderSettings extends StatefulWidget {
@@ -25,8 +26,8 @@ class _ProviderSettingsState extends State<ProviderSettings> {
   String serviceDescription = '';
   String locationAddress = '';
   dynamic pricePerHour;
-  dynamic latitude;
-  dynamic longitude;
+  double? latitude;
+  double? longitude;
 
   final List<String> allDays = const [
     'Sunday',
@@ -71,8 +72,12 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         serviceDescription = data['serviceDescription']?.toString() ?? '';
         locationAddress = data['locationAddress']?.toString() ?? '';
         pricePerHour = data['pricePerHour'];
-        latitude = data['latitude'];
-        longitude = data['longitude'];
+
+        final latValue = data['latitude'];
+        final lngValue = data['longitude'];
+
+        latitude = latValue is num ? latValue.toDouble() : double.tryParse('$latValue');
+        longitude = lngValue is num ? lngValue.toDouble() : double.tryParse('$lngValue');
 
         loading = false;
       });
@@ -104,9 +109,9 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         : 'Rs ${parsed.toStringAsFixed(2)}/hour';
   }
 
-  String _coordinateText(dynamic value) {
+  String _coordinateText(double? value) {
     if (value == null) return 'Not set';
-    return value.toString();
+    return value.toStringAsFixed(6);
   }
 
   String _formatTime(TimeOfDay time) {
@@ -116,9 +121,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
     return '$hour:$minute $period';
   }
 
-  Future<void> _pickTime({
-    required bool isStart,
-  }) async {
+  Future<void> _pickTime({required bool isStart}) async {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
@@ -133,6 +136,48 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         endHour = _formatTime(picked);
       }
     });
+  }
+
+  Future<void> _pickWorkLocationOnMap() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SelectLocationMapPage(),
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    final latValue = result['latitude'];
+    final lngValue = result['longitude'];
+
+    final pickedLat = latValue is num
+        ? latValue.toDouble()
+        : double.tryParse('$latValue');
+
+    final pickedLng = lngValue is num
+        ? lngValue.toDouble()
+        : double.tryParse('$lngValue');
+
+    if (pickedLat == null || pickedLng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid location selected')),
+      );
+      return;
+    }
+
+    setState(() {
+      latitude = pickedLat;
+      longitude = pickedLng;
+
+      if (locationAddress.trim().isEmpty) {
+        locationAddress = 'Selected on map';
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Work location selected')),
+    );
   }
 
   Future<void> _saveAvailability() async {
@@ -154,13 +199,16 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         'availableDays': selectedDays,
         'startHour': startHour,
         'endHour': endHour,
+        'locationAddress': locationAddress,
+        'latitude': latitude,
+        'longitude': longitude,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Availability updated successfully')),
+        const SnackBar(content: Text('Settings updated successfully')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -277,6 +325,19 @@ class _ProviderSettingsState extends State<ProviderSettings> {
             ),
             _infoTile('Latitude', _coordinateText(latitude)),
             _infoTile('Longitude', _coordinateText(longitude)),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _pickWorkLocationOnMap,
+                icon: const Icon(Icons.map),
+                label: Text(
+                  latitude != null && longitude != null
+                      ? 'Update Work Location on Map'
+                      : 'Set Work Location on Map',
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
             SwitchListTile(
               value: isAvailable,
@@ -337,7 +398,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
                   width: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-                    : const Text('Save Availability'),
+                    : const Text('Save Settings'),
               ),
             ),
             const SizedBox(height: 20),
