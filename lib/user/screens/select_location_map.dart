@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 
 class SelectLocationMapPage extends StatefulWidget {
@@ -10,17 +11,15 @@ class SelectLocationMapPage extends StatefulWidget {
 }
 
 class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
+
   bool _loading = true;
   String? _errorMessage;
 
   LatLng? _currentLatLng;
   LatLng? _selectedLatLng;
 
-  final CameraPosition _fallbackCamera = const CameraPosition(
-    target: LatLng(27.7172, 85.3240), // Kathmandu fallback
-    zoom: 14,
-  );
+  static const LatLng _fallbackLatLng = LatLng(27.7172, 85.3240); // Kathmandu
 
   @override
   void initState() {
@@ -31,7 +30,10 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
   Future<bool> _handlePermission() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _showSnackBar('Please enable location services.');
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enable location services.')),
+      );
       return false;
     }
 
@@ -43,7 +45,10 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      _showSnackBar('Location permission is required to use the map.');
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location permission is required.')),
+      );
       return false;
     }
 
@@ -53,18 +58,27 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
   Future<void> _loadCurrentLocation() async {
     try {
       final granted = await _handlePermission();
+
+      if (!mounted) return;
+
       if (!granted) {
         setState(() {
           _loading = false;
           _errorMessage = 'Location permission not granted.';
+          _selectedLatLng = _fallbackLatLng;
         });
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition();
-      final current = LatLng(position.latitude, position.longitude);
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
 
       if (!mounted) return;
+
+      final current = LatLng(position.latitude, position.longitude);
 
       setState(() {
         _currentLatLng = current;
@@ -72,73 +86,52 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
         _loading = false;
       });
 
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      if (_mapController != null) {
-        await _mapController!.animateCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(target: current, zoom: 16),
-          ),
-        );
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _mapController.move(current, 16);
+      });
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _loading = false;
-        _errorMessage = 'Failed to load map: $e';
+        _errorMessage = 'Failed to load location.';
+        _selectedLatLng = _fallbackLatLng;
       });
     }
   }
 
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  Set<Marker> _markers() {
-    final markers = <Marker>{};
-
-    if (_currentLatLng != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('current'),
-          position: _currentLatLng!,
-          infoWindow: const InfoWindow(title: 'Current Location'),
-        ),
-      );
-    }
-
-    if (_selectedLatLng != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('selected'),
-          position: _selectedLatLng!,
-          infoWindow: const InfoWindow(title: 'Selected Location'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueBlue,
-          ),
-        ),
-      );
-    }
-
-    return markers;
-  }
-
   Future<void> _goToCurrentLocation() async {
-    if (_currentLatLng == null) return;
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
 
-    await _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: _currentLatLng!, zoom: 16),
-      ),
-    );
+      if (!mounted) return;
+
+      final current = LatLng(position.latitude, position.longitude);
+
+      setState(() {
+        _currentLatLng = current;
+        _selectedLatLng = current;
+      });
+
+      _mapController.move(current, 16);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not get current location.')),
+      );
+    }
   }
 
   void _confirmLocation() {
     if (_selectedLatLng == null) {
-      _showSnackBar('Please select a location first.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a location first.')),
+      );
       return;
     }
 
@@ -148,33 +141,95 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
     });
   }
 
+  List<Marker> _buildMarkers() {
+    final markers = <Marker>[];
+
+    if (_currentLatLng != null) {
+      markers.add(
+        Marker(
+          point: _currentLatLng!,
+          width: 40,
+          height: 40,
+          child: const Icon(
+            Icons.my_location,
+            color: Colors.blue,
+            size: 32,
+          ),
+        ),
+      );
+    }
+
+    if (_selectedLatLng != null) {
+      markers.add(
+        Marker(
+          point: _selectedLatLng!,
+          width: 44,
+          height: 44,
+          child: const Icon(
+            Icons.location_pin,
+            color: Colors.red,
+            size: 40,
+          ),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final center = _selectedLatLng ?? _fallbackLatLng;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Location'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-          ? Center(child: Text(_errorMessage!))
           : Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: _fallbackCamera,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            markers: _markers(),
-            onMapCreated: (controller) {
-              _mapController = controller;
-            },
-            onTap: (latLng) {
-              setState(() {
-                _selectedLatLng = latLng;
-              });
-            },
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 15,
+              onTap: (tapPosition, point) {
+                setState(() {
+                  _selectedLatLng = point;
+                });
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.nepoo_fix',
+              ),
+              MarkerLayer(
+                markers: _buildMarkers(),
+              ),
+              RichAttributionWidget(
+                attributions: const [
+                  TextSourceAttribution('OpenStreetMap contributors'),
+                ],
+                showFlutterMapAttribution: false,
+              ),
+            ],
           ),
+          if (_errorMessage != null)
+            Positioned(
+              top: 12,
+              left: 12,
+              right: 12,
+              child: Material(
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(_errorMessage!),
+                ),
+              ),
+            ),
           Positioned(
             right: 16,
             bottom: 90,
