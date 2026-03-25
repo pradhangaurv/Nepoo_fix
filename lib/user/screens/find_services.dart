@@ -174,6 +174,17 @@ class _FindServicesState extends State<FindServices> {
               padding: EdgeInsets.only(top: 10),
               child: Text('Getting your location...'),
             ),
+          if (!loadingLocation)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Text(
+                'Showing currently available providers',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blueGrey,
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           SizedBox(
             height: 50,
@@ -214,27 +225,23 @@ class _FindServicesState extends State<FindServices> {
 
                 final docs = (snap.data?.docs ?? []).where((doc) {
                   final data = doc.data();
+
                   final approved = (data['approved'] ?? false) == true;
                   final blocked = (data['blocked'] ?? false) == true;
                   final setupComplete = (data['setupComplete'] ?? false) == true;
+                  final isAvailable = (data['isAvailable'] ?? true) == true;
                   final serviceType =
                   (data['serviceType'] ?? '').toString().toLowerCase();
 
                   return approved &&
                       !blocked &&
                       setupComplete &&
+                      isAvailable &&
                       serviceType == selectedType;
                 }).toList()
                   ..sort((a, b) {
                     final aData = a.data();
                     final bData = b.data();
-
-                    final aAvailable = (aData['isAvailable'] ?? true) == true;
-                    final bAvailable = (bData['isAvailable'] ?? true) == true;
-
-                    if (aAvailable != bAvailable) {
-                      return aAvailable ? -1 : 1;
-                    }
 
                     final aDistance = _distanceKm(
                       fromLat: userLatitude,
@@ -257,14 +264,22 @@ class _FindServicesState extends State<FindServices> {
                     if (aDistance != null && bDistance == null) return -1;
                     if (aDistance == null && bDistance != null) return 1;
 
-                    final aName = (aData['name'] ?? '').toString();
-                    final bName = (bData['name'] ?? '').toString();
+                    final aName = (aData['name'] ?? '').toString().toLowerCase();
+                    final bName = (bData['name'] ?? '').toString().toLowerCase();
                     return aName.compareTo(bName);
                   });
 
                 if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('No providers found for this service'),
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        loadingLocation
+                            ? 'No available providers found for this service'
+                            : 'No available providers found for this service right now',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   );
                 }
 
@@ -281,7 +296,6 @@ class _FindServicesState extends State<FindServices> {
                             'No description available';
                     final price = data['pricePerHour'];
                     final phone = data['phone']?.toString() ?? 'No phone';
-                    final isAvailable = (data['isAvailable'] ?? true) == true;
                     final availableDays = ((data['availableDays'] ?? []) as List)
                         .map((e) => e.toString())
                         .toList();
@@ -324,17 +338,13 @@ class _FindServicesState extends State<FindServices> {
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: isAvailable
-                                          ? Colors.green.withValues(alpha: 0.10)
-                                          : Colors.red.withValues(alpha: 0.10),
+                                      color: Colors.green.withValues(alpha: 0.10),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
-                                    child: Text(
-                                      isAvailable ? 'Available Now' : 'On Job',
+                                    child: const Text(
+                                      'Available Now',
                                       style: TextStyle(
-                                        color: isAvailable
-                                            ? Colors.green
-                                            : Colors.red,
+                                        color: Colors.green,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),

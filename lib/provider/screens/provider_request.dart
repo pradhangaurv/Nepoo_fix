@@ -60,6 +60,17 @@ class _ProviderRequestState extends State<ProviderRequest> {
         status == 'in_progress';
   }
 
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  String _coordinateText(double? value) {
+    if (value == null) return 'Not available';
+    return value.toStringAsFixed(6);
+  }
+
   Future<void> _updateStatus(String requestId, String status) async {
     final provider = FirebaseAuth.instance.currentUser;
     if (provider == null) return;
@@ -73,8 +84,7 @@ class _ProviderRequestState extends State<ProviderRequest> {
         final providerSnap = await transaction.get(providerRef);
         final providerData = providerSnap.data() ?? <String, dynamic>{};
 
-        final currentRequestId =
-        providerData['currentRequestId']?.toString();
+        final currentRequestId = providerData['currentRequestId']?.toString();
 
         transaction.update(requestRef, {
           'status': status,
@@ -160,30 +170,35 @@ class _ProviderRequestState extends State<ProviderRequest> {
   }
 
   Widget _summaryCard(String title, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(title, textAlign: TextAlign.center),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: color,
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
       ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(title, textAlign: TextAlign.center),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text('$label$value'),
     );
   }
 
@@ -243,15 +258,16 @@ class _ProviderRequestState extends State<ProviderRequest> {
               final pendingCount = activeDocs
                   .where((doc) => (doc.data()['status'] ?? '') == 'pending')
                   .length;
+
               final acceptedCount = activeDocs
                   .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
                   .length;
-              final travelCount = activeDocs
-                  .where((doc) {
+
+              final travelCount = activeDocs.where((doc) {
                 final status = (doc.data()['status'] ?? '').toString();
                 return status == 'on_the_way' || status == 'arrived';
-              })
-                  .length;
+              }).length;
+
               final workingCount = activeDocs
                   .where((doc) => (doc.data()['status'] ?? '') == 'in_progress')
                   .length;
@@ -267,45 +283,37 @@ class _ProviderRequestState extends State<ProviderRequest> {
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    child: GridView.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.5,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
                       children: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width / 2 - 20,
-                          child: _summaryCard(
-                            'Pending',
-                            pendingCount.toString(),
-                            Icons.hourglass_top,
-                            Colors.deepPurple,
-                          ),
+                        _summaryCard(
+                          'Pending',
+                          pendingCount.toString(),
+                          Icons.hourglass_top,
+                          Colors.deepPurple,
                         ),
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width / 2 - 20,
-                          child: _summaryCard(
-                            'Accepted',
-                            acceptedCount.toString(),
-                            Icons.check_circle_outline,
-                            Colors.blue,
-                          ),
+                        _summaryCard(
+                          'Accepted',
+                          acceptedCount.toString(),
+                          Icons.check_circle_outline,
+                          Colors.blue,
                         ),
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width / 2 - 20,
-                          child: _summaryCard(
-                            'Traveling',
-                            travelCount.toString(),
-                            Icons.directions_car,
-                            Colors.orange,
-                          ),
+                        _summaryCard(
+                          'Traveling',
+                          travelCount.toString(),
+                          Icons.directions_car,
+                          Colors.orange,
                         ),
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width / 2 - 20,
-                          child: _summaryCard(
-                            'Working',
-                            workingCount.toString(),
-                            Icons.build_circle_outlined,
-                            Colors.purple,
-                          ),
+                        _summaryCard(
+                          'Working',
+                          workingCount.toString(),
+                          Icons.build_circle_outlined,
+                          Colors.purple,
                         ),
                       ],
                     ),
@@ -333,7 +341,7 @@ class _ProviderRequestState extends State<ProviderRequest> {
                             child: Text(
                               isAvailable
                                   ? 'You are currently available for new requests.'
-                                  : 'You are busy with an active request. Complete it before accepting another one.',
+                                  : 'You are busy right now,complete it before accepting another one.',
                               style: TextStyle(
                                 color: isAvailable ? Colors.green : Colors.red,
                                 fontWeight: FontWeight.w600,
@@ -362,6 +370,11 @@ class _ProviderRequestState extends State<ProviderRequest> {
                         final address =
                             data['serviceAddress']?.toString() ?? '';
                         final createdAt = data['createdAt'];
+
+                        final serviceLatitude =
+                        _toDouble(data['serviceLatitude']);
+                        final serviceLongitude =
+                        _toDouble(data['serviceLongitude']);
 
                         final isCurrentAssignedRequest =
                             currentRequestId == doc.id;
@@ -406,16 +419,23 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                Text('Service: $serviceType'),
-                                const SizedBox(height: 4),
-                                Text('Problem: $problem'),
-                                const SizedBox(height: 4),
-                                Text('Address: $address'),
-                                const SizedBox(height: 4),
-                                Text('Phone: $userPhone'),
-                                const SizedBox(height: 4),
-                                Text('Requested: ${_formatDate(createdAt)}'),
+                                const SizedBox(height: 10),
+                                _infoLine('Service: ', serviceType),
+                                _infoLine('Problem: ', problem),
+                                _infoLine('Address: ', address.isEmpty ? 'Not provided' : address),
+                                _infoLine('Phone: ', userPhone.isEmpty ? 'Not provided' : userPhone),
+                                _infoLine(
+                                  'Latitude: ',
+                                  _coordinateText(serviceLatitude),
+                                ),
+                                _infoLine(
+                                  'Longitude: ',
+                                  _coordinateText(serviceLongitude),
+                                ),
+                                _infoLine(
+                                  'Requested: ',
+                                  _formatDate(createdAt),
+                                ),
                                 if (status == 'pending' &&
                                     hasActiveAssignedRequest &&
                                     !isCurrentAssignedRequest) ...[

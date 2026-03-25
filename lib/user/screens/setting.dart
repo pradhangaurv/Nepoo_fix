@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../auth/login_screen.dart';
-import 'select_location_map.dart';
+import '../../shared/screen/select_location_map.dart';
 
 class Setting extends StatefulWidget {
   const Setting({super.key});

@@ -95,20 +95,61 @@ class _ActivityState extends State<Activity> {
       },
     );
 
-    if (confirm != true) return;
+    if (!mounted || confirm != true) return;
 
-    await FirebaseFirestore.instance
-        .collection('service_requests')
-        .doc(requestId)
-        .update({
-      'status': 'cancelled',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final db = FirebaseFirestore.instance;
+    final requestRef = db.collection('service_requests').doc(requestId);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Request cancelled')),
-    );
+    try {
+      await db.runTransaction((transaction) async {
+        final requestSnap = await transaction.get(requestRef);
+
+        if (!requestSnap.exists) {
+          throw Exception('Request not found');
+        }
+
+        final requestData = requestSnap.data() ?? <String, dynamic>{};
+        final status = (requestData['status'] ?? '').toString();
+        final providerId = (requestData['providerId'] ?? '').toString();
+
+        transaction.update(requestRef, {
+          'status': 'cancelled',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if ((status == 'accepted' || status == 'on_the_way') &&
+            providerId.isNotEmpty) {
+          final providerRef = db.collection('users').doc(providerId);
+          final providerSnap = await transaction.get(providerRef);
+
+          if (providerSnap.exists) {
+            final providerData = providerSnap.data() ?? <String, dynamic>{};
+            final currentRequestId =
+            (providerData['currentRequestId'] ?? '').toString();
+
+            if (currentRequestId == requestId) {
+              transaction.update(providerRef, {
+                'isAvailable': true,
+                'currentRequestId': null,
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+            }
+          }
+        }
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request cancelled')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to cancel request: $e')),
+      );
+    }
   }
 
   Widget _filterChip(String key, String label) {

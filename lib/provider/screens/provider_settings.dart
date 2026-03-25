@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
 
 import '../../auth/login_screen.dart';
-import '../../user/screens/select_location_map.dart';
+import '../../shared/screen/select_location_map.dart';
 import 'provider_setup.dart';
 
 class ProviderSettings extends StatefulWidget {
@@ -48,7 +49,9 @@ class _ProviderSettingsState extends State<ProviderSettings> {
   Future<void> _loadAvailability() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
       return;
     }
 
@@ -59,6 +62,8 @@ class _ProviderSettingsState extends State<ProviderSettings> {
           .get();
 
       final data = snap.data() ?? <String, dynamic>{};
+
+      if (!mounted) return;
 
       setState(() {
         isAvailable = (data['isAvailable'] ?? true) == true;
@@ -76,18 +81,23 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         final latValue = data['latitude'];
         final lngValue = data['longitude'];
 
-        latitude = latValue is num ? latValue.toDouble() : double.tryParse('$latValue');
-        longitude = lngValue is num ? lngValue.toDouble() : double.tryParse('$lngValue');
+        latitude = latValue is num
+            ? latValue.toDouble()
+            : double.tryParse('$latValue');
+        longitude = lngValue is num
+            ? lngValue.toDouble()
+            : double.tryParse('$lngValue');
 
         loading = false;
       });
     } catch (e) {
-      if (mounted) {
-        setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load settings: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() => loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load settings: $e')),
+      );
     }
   }
 
@@ -127,7 +137,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
       initialTime: TimeOfDay.now(),
     );
 
-    if (picked == null) return;
+    if (!mounted || picked == null) return;
 
     setState(() {
       if (isStart) {
@@ -166,13 +176,41 @@ class _ProviderSettingsState extends State<ProviderSettings> {
       return;
     }
 
+    String resolvedAddress = 'Selected on map';
+
+    try {
+      final placemarks = await placemarkFromCoordinates(pickedLat, pickedLng);
+
+      if (!mounted) return;
+
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+
+        final parts = [
+          p.street,
+          p.subLocality,
+          p.locality,
+          p.administrativeArea,
+          p.country,
+        ]
+            .where((e) => e != null && e.trim().isNotEmpty)
+            .map((e) => e!.trim())
+            .toList();
+
+        if (parts.isNotEmpty) {
+          resolvedAddress = parts.join(', ');
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+    }
+
+    if (!mounted) return;
+
     setState(() {
       latitude = pickedLat;
       longitude = pickedLng;
-
-      if (locationAddress.trim().isEmpty) {
-        locationAddress = 'Selected on map';
-      }
+      locationAddress = resolvedAddress;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -216,7 +254,9 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         SnackBar(content: Text('Failed to save settings: $e')),
       );
     } finally {
-      if (mounted) setState(() => saving = false);
+      if (mounted) {
+        setState(() => saving = false);
+      }
     }
   }
 
@@ -240,7 +280,9 @@ class _ProviderSettingsState extends State<ProviderSettings> {
       onSelected: (value) {
         setState(() {
           if (value) {
-            selectedDays.add(day);
+            if (!selectedDays.contains(day)) {
+              selectedDays.add(day);
+            }
           } else {
             selectedDays.remove(day);
           }
@@ -295,6 +337,8 @@ class _ProviderSettingsState extends State<ProviderSettings> {
                   builder: (_) => const ProviderSetupScreen(),
                 ),
               );
+
+              if (!mounted) return;
               _loadAvailability();
             },
           ),

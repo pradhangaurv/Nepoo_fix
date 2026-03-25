@@ -1,6 +1,12 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
 
 class ProviderHome extends StatefulWidget {
   const ProviderHome({super.key});
@@ -10,6 +16,156 @@ class ProviderHome extends StatefulWidget {
 }
 
 class _ProviderHomeState extends State<ProviderHome> {
+  LatLng? _providerCurrentLatLng;
+  bool _loadingLocation = true;
+  String? _locationError;
+
+  List<LatLng> _routePoints = [];
+  bool _loadingRoute = false;
+  String? _routeError;
+  String? _routeKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProviderCurrentLocation();
+  }
+
+  Future<bool> _handlePermission() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return false;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<void> _loadProviderCurrentLocation() async {
+    try {
+      final granted = await _handlePermission();
+
+      if (!mounted) return;
+
+      if (!granted) {
+        setState(() {
+          _loadingLocation = false;
+          _locationError = 'Location permission not granted.';
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _providerCurrentLatLng = LatLng(position.latitude, position.longitude);
+        _loadingLocation = false;
+        _locationError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingLocation = false;
+        _locationError = 'Could not load your current location.';
+      });
+    }
+  }
+
+  Future<void> _loadRoute({
+    required LatLng from,
+    required LatLng to,
+  }) async {
+    final key =
+        '${from.latitude},${from.longitude}->${to.latitude},${to.longitude}';
+
+    if (_routeKey == key && _routePoints.isNotEmpty) return;
+
+    try {
+      if (mounted) {
+        setState(() {
+          _loadingRoute = true;
+          _routeError = null;
+        });
+      }
+
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+            '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
+            '?overview=full&geometries=geojson',
+      );
+
+      final response = await http.get(url);
+
+      if (!mounted) return;
+
+      if (response.statusCode != 200) {
+        setState(() {
+          _loadingRoute = false;
+          _routeError = 'Could not load route.';
+          _routePoints = [];
+        });
+        return;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final routes = (data['routes'] as List?) ?? [];
+
+      if (routes.isEmpty) {
+        setState(() {
+          _loadingRoute = false;
+          _routeError = 'No route found.';
+          _routePoints = [];
+        });
+        return;
+      }
+
+      final geometry =
+          routes.first['geometry'] as Map<String, dynamic>? ?? {};
+      final coordinates = (geometry['coordinates'] as List?) ?? [];
+
+      final points = coordinates
+          .whereType<List>()
+          .map((c) {
+        if (c.length < 2) return null;
+        final lng = (c[0] as num).toDouble();
+        final lat = (c[1] as num).toDouble();
+        return LatLng(lat, lng);
+      })
+          .whereType<LatLng>()
+          .toList();
+
+      setState(() {
+        _routePoints = points;
+        _loadingRoute = false;
+        _routeError = null;
+        _routeKey = key;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingRoute = false;
+        _routeError = 'Failed to load route.';
+        _routePoints = [];
+      });
+    }
+  }
+
   String _priceText(dynamic value) {
     if (value == null) return "Not set";
 
@@ -31,6 +187,387 @@ class _ProviderHomeState extends State<ProviderHome> {
   String _daysText(List<String> days) {
     if (days.isEmpty) return "Not set";
     return days.join(', ');
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  bool _showMapForStatus(String status) {
+    return status == 'accepted' || status == 'on_the_way';
+  }
+
+  bool _hasActiveJobWithoutMap(String status) {
+    return status == 'arrived' || status == 'in_progress';
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'accepted':
+        return Colors.blue;
+      case 'on_the_way':
+        return Colors.orange;
+      case 'arrived':
+        return Colors.teal;
+      case 'in_progress':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'on_the_way':
+        return 'On The Way';
+      case 'in_progress':
+        return 'In Progress';
+      case 'arrived':
+        return 'Arrived';
+      case 'accepted':
+        return 'Accepted';
+      default:
+        return 'No Active Job';
+    }
+  }
+
+  Widget _buildStatusChip(String status) {
+    final color = _statusColor(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        _statusLabel(status),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _infoLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text('$label$value'),
+    );
+  }
+
+  Widget _buildNoActiveMapCard(bool isAvailable) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.map_outlined, color: Colors.blueGrey),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isAvailable
+                    ? 'You are available. Accept a request to see the job map here.'
+                    : 'No current map to show right now.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArrivedCard({
+    required String status,
+    required String customerName,
+    required String serviceAddress,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Active Job',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                _buildStatusChip(status),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _infoLine('Customer: ', customerName),
+            _infoLine(
+              'Location: ',
+              serviceAddress.isEmpty ? 'Not provided' : serviceAddress,
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapCard({
+    required String status,
+    required String customerName,
+    required String serviceAddress,
+    required double? customerLat,
+    required double? customerLng,
+  }) {
+    if (customerLat == null || customerLng == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Active Job Map',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  _buildStatusChip(status),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _infoLine('Customer: ', customerName),
+              _infoLine(
+                'Location: ',
+                serviceAddress.isEmpty ? 'Not provided' : serviceAddress,
+              ),
+              const SizedBox(height: 8),
+              const Text('Customer location is not available for this request.'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final customerLatLng = LatLng(customerLat, customerLng);
+
+    if (_providerCurrentLatLng != null) {
+      final key =
+          '${_providerCurrentLatLng!.latitude},${_providerCurrentLatLng!.longitude}->${customerLatLng.latitude},${customerLatLng.longitude}';
+      if (_routeKey != key && !_loadingRoute) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _loadRoute(from: _providerCurrentLatLng!, to: customerLatLng);
+        });
+      }
+    }
+
+    final markers = <Marker>[
+      Marker(
+        point: customerLatLng,
+        width: 44,
+        height: 44,
+        child: const Icon(
+          Icons.location_pin,
+          color: Colors.red,
+          size: 40,
+        ),
+      ),
+    ];
+
+    if (_providerCurrentLatLng != null) {
+      markers.add(
+        Marker(
+          point: _providerCurrentLatLng!,
+          width: 40,
+          height: 40,
+          child: const Icon(
+            Icons.my_location,
+            color: Colors.blue,
+            size: 32,
+          ),
+        ),
+      );
+    }
+
+    final routeToDraw = _routePoints.isNotEmpty
+        ? _routePoints
+        : (_providerCurrentLatLng != null
+        ? [_providerCurrentLatLng!, customerLatLng]
+        : <LatLng>[]);
+
+    final boundsPoints = <LatLng>[
+      customerLatLng,
+      if (_providerCurrentLatLng != null) _providerCurrentLatLng!,
+      ..._routePoints,
+    ];
+
+    final cameraFit = boundsPoints.length >= 2
+        ? CameraFit.bounds(
+      bounds: LatLngBounds.fromPoints(boundsPoints),
+      padding: const EdgeInsets.all(40),
+    )
+        : null;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Active Job Map',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                _buildStatusChip(status),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _infoLine('Customer: ', customerName),
+            _infoLine(
+              'Location: ',
+              serviceAddress.isEmpty ? 'Not provided' : serviceAddress,
+            ),
+            if (_loadingLocation) ...[
+              const SizedBox(height: 8),
+              const Text('Loading your current location...'),
+            ],
+            if (_locationError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _locationError!,
+                style: const TextStyle(color: Colors.orange),
+              ),
+            ],
+            if (_loadingRoute) ...[
+              const SizedBox(height: 8),
+              const Text('Loading route...'),
+            ],
+            if (_routeError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _routeError!,
+                style: const TextStyle(color: Colors.orange),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 280,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: customerLatLng,
+                    initialZoom: 15,
+                    initialCameraFit: cameraFit,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.nepoo_fix',
+                    ),
+                    if (routeToDraw.isNotEmpty)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: routeToDraw,
+                            strokeWidth: 5,
+                            color: Colors.blue,
+                          ),
+                        ],
+                      ),
+                    MarkerLayer(markers: markers),
+                    RichAttributionWidget(
+                      attributions: const [
+                        TextSourceAttribution('OpenStreetMap contributors'),
+                      ],
+                      showFlutterMapAttribution: false,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await _loadProviderCurrentLocation();
+                if (!mounted) return;
+                if (_providerCurrentLatLng != null) {
+                  await _loadRoute(
+                    from: _providerCurrentLatLng!,
+                    to: customerLatLng,
+                  );
+                }
+              },
+              icon: const Icon(Icons.my_location),
+              label: const Text('Refresh My Location'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileCard({
+    required String serviceType,
+    required String description,
+    required dynamic price,
+    required bool approved,
+    required bool isAvailable,
+    required List<String> availableDays,
+    required String startHour,
+    required String endHour,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Your Service Profile",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text("Service Type: $serviceType"),
+            const SizedBox(height: 8),
+            Text("Description: $description"),
+            const SizedBox(height: 8),
+            Text("Price: ${_priceText(price)}"),
+            const SizedBox(height: 8),
+            Text("Approval Status: ${approved ? "Approved" : "Pending"}"),
+            const SizedBox(height: 8),
+            Text("Availability: ${isAvailable ? "Available" : "Unavailable"}"),
+            const SizedBox(height: 8),
+            Text("Available Days: ${_daysText(availableDays)}"),
+            const SizedBox(height: 8),
+            Text("Working Hours: $startHour - $endHour"),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -69,6 +606,7 @@ class _ProviderHomeState extends State<ProviderHome> {
           final price = data["pricePerHour"];
           final approved = (data["approved"] ?? false) == true;
           final isAvailable = (data["isAvailable"] ?? true) == true;
+          final currentRequestId = data["currentRequestId"]?.toString() ?? '';
           final availableDays = ((data["availableDays"] ?? []) as List)
               .map((e) => e.toString())
               .toList();
@@ -88,36 +626,75 @@ class _ProviderHomeState extends State<ProviderHome> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Your Service Profile",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                if (currentRequestId.isNotEmpty)
+                  StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    stream: FirebaseFirestore.instance
+                        .collection('service_requests')
+                        .doc(currentRequestId)
+                        .snapshots(),
+                    builder: (context, requestSnap) {
+                      if (requestSnap.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text("Service Type: $serviceType"),
-                        const SizedBox(height: 8),
-                        Text("Description: $description"),
-                        const SizedBox(height: 8),
-                        Text("Price: ${_priceText(price)}"),
-                        const SizedBox(height: 8),
-                        Text("Approval Status: ${approved ? "Approved" : "Pending"}"),
-                        const SizedBox(height: 8),
-                        Text("Availability: ${isAvailable ? "Available" : "Unavailable"}"),
-                        const SizedBox(height: 8),
-                        Text("Available Days: ${_daysText(availableDays)}"),
-                        const SizedBox(height: 8),
-                        Text("Working Hours: $startHour - $endHour"),
-                      ],
-                    ),
-                  ),
+                        );
+                      }
+
+                      if (!requestSnap.hasData ||
+                          !requestSnap.data!.exists ||
+                          requestSnap.data!.data() == null) {
+                        return _buildNoActiveMapCard(isAvailable);
+                      }
+
+                      final requestData = requestSnap.data!.data()!;
+                      final status = (requestData['status'] ?? '').toString();
+                      final customerName =
+                          requestData['userName']?.toString() ?? 'Customer';
+                      final serviceAddress =
+                          requestData['serviceAddress']?.toString() ?? '';
+                      final customerLat =
+                      _toDouble(requestData['serviceLatitude']);
+                      final customerLng =
+                      _toDouble(requestData['serviceLongitude']);
+
+                      if (_showMapForStatus(status)) {
+                        return _buildMapCard(
+                          status: status,
+                          customerName: customerName,
+                          serviceAddress: serviceAddress,
+                          customerLat: customerLat,
+                          customerLng: customerLng,
+                        );
+                      }
+
+                      if (_hasActiveJobWithoutMap(status)) {
+                        return _buildArrivedCard(
+                          status: status,
+                          customerName: customerName,
+                          serviceAddress: serviceAddress,
+                        );
+                      }
+
+                      return _buildNoActiveMapCard(isAvailable);
+                    },
+                  )
+                else
+                  _buildNoActiveMapCard(isAvailable),
+                const SizedBox(height: 16),
+                _buildProfileCard(
+                  serviceType: serviceType,
+                  description: description,
+                  price: price,
+                  approved: approved,
+                  isAvailable: isAvailable,
+                  availableDays: availableDays,
+                  startHour: startHour,
+                  endHour: endHour,
                 ),
               ],
             ),

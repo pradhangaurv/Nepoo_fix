@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 
 import 'activity.dart';
-import 'select_location_map.dart';
+import '../../shared/screen/select_location_map.dart';
 
 class ProviderDetailsPage extends StatefulWidget {
   final String providerId;
@@ -197,6 +197,8 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
       if (!mounted) return;
 
       if (hasActiveRequest) {
+        setState(() => bookingLoading = false);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -339,7 +341,14 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
           final description =
               data['serviceDescription']?.toString() ?? 'No description';
           final phone = data['phone']?.toString() ?? 'No phone';
-          final address = data['address']?.toString() ?? 'No address';
+
+          final locationAddress =
+              data['locationAddress']?.toString().trim() ?? '';
+          final profileAddress = data['address']?.toString().trim() ?? '';
+          final address = locationAddress.isNotEmpty
+              ? locationAddress
+              : (profileAddress.isNotEmpty ? profileAddress : 'No address');
+
           final price = data['pricePerHour'];
 
           final isAvailable = (data['isAvailable'] ?? true) == true;
