@@ -1,12 +1,11 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+
+import '../../services/location_service.dart';
+import '../../services/route_service.dart';
 
 class ProviderHome extends StatefulWidget {
   const ProviderHome({super.key});
@@ -16,6 +15,9 @@ class ProviderHome extends StatefulWidget {
 }
 
 class _ProviderHomeState extends State<ProviderHome> {
+  final LocationService _locationService = LocationService();
+  final RouteService _routeService = RouteService();
+
   LatLng? _providerCurrentLatLng;
   bool _loadingLocation = true;
   String? _locationError;
@@ -31,31 +33,13 @@ class _ProviderHomeState extends State<ProviderHome> {
     _loadProviderCurrentLocation();
   }
 
-  Future<bool> _handlePermission() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return false;
-
-    LocationPermission permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return false;
-    }
-
-    return true;
-  }
-
   Future<void> _loadProviderCurrentLocation() async {
     try {
-      final granted = await _handlePermission();
+      final current = await _locationService.getCurrentLatLng();
 
       if (!mounted) return;
 
-      if (!granted) {
+      if (current == null) {
         setState(() {
           _loadingLocation = false;
           _locationError = 'Location permission not granted.';
@@ -63,16 +47,8 @@ class _ProviderHomeState extends State<ProviderHome> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      if (!mounted) return;
-
       setState(() {
-        _providerCurrentLatLng = LatLng(position.latitude, position.longitude);
+        _providerCurrentLatLng = current;
         _loadingLocation = false;
         _locationError = null;
       });
@@ -93,67 +69,25 @@ class _ProviderHomeState extends State<ProviderHome> {
     final key =
         '${from.latitude},${from.longitude}->${to.latitude},${to.longitude}';
 
-    if (_routeKey == key && _routePoints.isNotEmpty) return;
+    if (_routeKey == key && (_routePoints.isNotEmpty || _loadingRoute)) return;
 
     try {
       if (mounted) {
         setState(() {
           _loadingRoute = true;
           _routeError = null;
+          _routeKey = key;
         });
       }
 
-      final url = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/'
-            '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
-            '?overview=full&geometries=geojson',
-      );
-
-      final response = await http.get(url);
+      final points = await _routeService.getDrivingRoute(from: from, to: to);
 
       if (!mounted) return;
-
-      if (response.statusCode != 200) {
-        setState(() {
-          _loadingRoute = false;
-          _routeError = 'Could not load route.';
-          _routePoints = [];
-        });
-        return;
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final routes = (data['routes'] as List?) ?? [];
-
-      if (routes.isEmpty) {
-        setState(() {
-          _loadingRoute = false;
-          _routeError = 'No route found.';
-          _routePoints = [];
-        });
-        return;
-      }
-
-      final geometry =
-          routes.first['geometry'] as Map<String, dynamic>? ?? {};
-      final coordinates = (geometry['coordinates'] as List?) ?? [];
-
-      final points = coordinates
-          .whereType<List>()
-          .map((c) {
-        if (c.length < 2) return null;
-        final lng = (c[0] as num).toDouble();
-        final lat = (c[1] as num).toDouble();
-        return LatLng(lat, lng);
-      })
-          .whereType<LatLng>()
-          .toList();
 
       setState(() {
         _routePoints = points;
         _loadingRoute = false;
-        _routeError = null;
-        _routeKey = key;
+        _routeError = points.isEmpty ? 'No route found.' : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -311,7 +245,6 @@ class _ProviderHomeState extends State<ProviderHome> {
               'Location: ',
               serviceAddress.isEmpty ? 'Not provided' : serviceAddress,
             ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -365,6 +298,7 @@ class _ProviderHomeState extends State<ProviderHome> {
     if (_providerCurrentLatLng != null) {
       final key =
           '${_providerCurrentLatLng!.latitude},${_providerCurrentLatLng!.longitude}->${customerLatLng.latitude},${customerLatLng.longitude}';
+
       if (_routeKey != key && !_loadingRoute) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -511,6 +445,7 @@ class _ProviderHomeState extends State<ProviderHome> {
               onPressed: () async {
                 await _loadProviderCurrentLocation();
                 if (!mounted) return;
+
                 if (_providerCurrentLatLng != null) {
                   await _loadRoute(
                     from: _providerCurrentLatLng!,

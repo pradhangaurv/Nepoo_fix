@@ -1,9 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 
+import '../../services/location_service.dart';
 import 'provider_details.dart';
 
 class FindServices extends StatefulWidget {
@@ -14,11 +12,12 @@ class FindServices extends StatefulWidget {
 }
 
 class _FindServicesState extends State<FindServices> {
+  final LocationService _locationService = LocationService();
+
   String selectedType = 'cleaner';
 
-  double? userLatitude;
-  double? userLongitude;
   bool loadingLocation = true;
+  bool locationAvailable = false;
 
   final List<Map<String, String>> categories = const [
     {'key': 'cleaner', 'label': 'Cleaner'},
@@ -35,45 +34,21 @@ class _FindServicesState extends State<FindServices> {
 
   Future<void> _loadCurrentLocation() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (mounted) {
-          setState(() => loadingLocation = false);
-        }
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          setState(() => loadingLocation = false);
-        }
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      final current = await _locationService.getCurrentLatLng();
 
       if (!mounted) return;
 
       setState(() {
-        userLatitude = position.latitude;
-        userLongitude = position.longitude;
         loadingLocation = false;
+        locationAvailable = current != null;
       });
-    } catch (e) {
-      if (mounted) {
-        setState(() => loadingLocation = false);
-      }
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        loadingLocation = false;
+        locationAvailable = false;
+      });
     }
   }
 
@@ -100,11 +75,6 @@ class _FindServicesState extends State<FindServices> {
     return text[0].toUpperCase() + text.substring(1);
   }
 
-  String _daysText(List<String> days) {
-    if (days.isEmpty) return 'Not set';
-    return days.join(', ');
-  }
-
   void _openProviderDetails(String providerId) {
     Navigator.push(
       context,
@@ -112,53 +82,6 @@ class _FindServicesState extends State<FindServices> {
         builder: (_) => ProviderDetailsPage(providerId: providerId),
       ),
     );
-  }
-
-  double? _toDouble(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString());
-  }
-
-  double? _distanceKm({
-    required double? fromLat,
-    required double? fromLng,
-    required double? toLat,
-    required double? toLng,
-  }) {
-    if (fromLat == null || fromLng == null || toLat == null || toLng == null) {
-      return null;
-    }
-
-    const earthRadiusKm = 6371.0;
-
-    final dLat = _degToRad(toLat - fromLat);
-    final dLng = _degToRad(toLng - fromLng);
-
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-            math.cos(_degToRad(fromLat)) *
-                math.cos(_degToRad(toLat)) *
-                math.sin(dLng / 2) *
-                math.sin(dLng / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadiusKm * c;
-  }
-
-  double _degToRad(double deg) {
-    return deg * (math.pi / 180);
-  }
-
-  String _distanceText(double? distanceKm) {
-    if (distanceKm == null) return 'Distance unavailable';
-
-    if (distanceKm < 1) {
-      final meters = (distanceKm * 1000).round();
-      return '$meters m away';
-    }
-
-    return '${distanceKm.toStringAsFixed(1)} km away';
   }
 
   @override
@@ -172,14 +95,16 @@ class _FindServicesState extends State<FindServices> {
           if (loadingLocation)
             const Padding(
               padding: EdgeInsets.only(top: 10),
-              child: Text('Getting your location...'),
+              child: Text('Checking provider...'),
             ),
           if (!loadingLocation)
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
               child: Text(
-                'Showing currently available providers',
-                style: TextStyle(
+                locationAvailable
+                    ? 'Showing currently available providers'
+                    : 'Showing available providers',
+                style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.blueGrey,
                 ),
@@ -240,32 +165,12 @@ class _FindServicesState extends State<FindServices> {
                       serviceType == selectedType;
                 }).toList()
                   ..sort((a, b) {
-                    final aData = a.data();
-                    final bData = b.data();
-
-                    final aDistance = _distanceKm(
-                      fromLat: userLatitude,
-                      fromLng: userLongitude,
-                      toLat: _toDouble(aData['latitude']),
-                      toLng: _toDouble(aData['longitude']),
-                    );
-
-                    final bDistance = _distanceKm(
-                      fromLat: userLatitude,
-                      fromLng: userLongitude,
-                      toLat: _toDouble(bData['latitude']),
-                      toLng: _toDouble(bData['longitude']),
-                    );
-
-                    if (aDistance != null && bDistance != null) {
-                      return aDistance.compareTo(bDistance);
-                    }
-
-                    if (aDistance != null && bDistance == null) return -1;
-                    if (aDistance == null && bDistance != null) return 1;
-
-                    final aName = (aData['name'] ?? '').toString().toLowerCase();
-                    final bName = (bData['name'] ?? '').toString().toLowerCase();
+                    final aName = (a.data()['name'] ?? '')
+                        .toString()
+                        .toLowerCase();
+                    final bName = (b.data()['name'] ?? '')
+                        .toString()
+                        .toLowerCase();
                     return aName.compareTo(bName);
                   });
 
@@ -274,9 +179,7 @@ class _FindServicesState extends State<FindServices> {
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(
-                        loadingLocation
-                            ? 'No available providers found for this service'
-                            : 'No available providers found for this service right now',
+                        'No available providers found for this service right now',
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -291,25 +194,7 @@ class _FindServicesState extends State<FindServices> {
                     final data = doc.data();
 
                     final name = data['name']?.toString() ?? 'Unknown';
-                    final description =
-                        data['serviceDescription']?.toString() ??
-                            'No description available';
                     final price = data['pricePerHour'];
-                    final phone = data['phone']?.toString() ?? 'No phone';
-                    final availableDays = ((data['availableDays'] ?? []) as List)
-                        .map((e) => e.toString())
-                        .toList();
-                    final startHour = data['startHour']?.toString() ?? 'Not set';
-                    final endHour = data['endHour']?.toString() ?? 'Not set';
-
-                    final providerLatitude = _toDouble(data['latitude']);
-                    final providerLongitude = _toDouble(data['longitude']);
-                    final distanceKm = _distanceKm(
-                      fromLat: userLatitude,
-                      fromLng: userLongitude,
-                      toLat: providerLatitude,
-                      toLng: providerLongitude,
-                    );
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -360,8 +245,6 @@ class _FindServicesState extends State<FindServices> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(description),
-                              const SizedBox(height: 8),
                               Text(
                                 _priceText(price),
                                 style: const TextStyle(
@@ -369,14 +252,6 @@ class _FindServicesState extends State<FindServices> {
                                   color: Colors.green,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Text('Phone: $phone'),
-                              const SizedBox(height: 4),
-                              Text('Days: ${_daysText(availableDays)}'),
-                              const SizedBox(height: 4),
-                              Text('Hours: $startHour - $endHour'),
-                              const SizedBox(height: 4),
-                              Text('Distance: ${_distanceText(distanceKm)}'),
                               const SizedBox(height: 10),
                               Align(
                                 alignment: Alignment.centerRight,

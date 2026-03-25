@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../auth/login_screen.dart';
+import '../../services/location_service.dart';
 import '../../shared/screen/select_location_map.dart';
 import 'provider_setup.dart';
 
@@ -15,6 +16,8 @@ class ProviderSettings extends StatefulWidget {
 }
 
 class _ProviderSettingsState extends State<ProviderSettings> {
+  final LocationService _locationService = LocationService();
+
   bool loading = true;
   bool saving = false;
 
@@ -23,6 +26,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
   String startHour = '09:00 AM';
   String endHour = '06:00 PM';
 
+  String providerName = '';
   String serviceType = '';
   String serviceDescription = '';
   String locationAddress = '';
@@ -66,6 +70,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
       if (!mounted) return;
 
       setState(() {
+        providerName = data['name']?.toString() ?? '';
         isAvailable = (data['isAvailable'] ?? true) == true;
         selectedDays = ((data['availableDays'] ?? []) as List)
             .map((e) => e.toString())
@@ -119,11 +124,6 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         : 'Rs ${parsed.toStringAsFixed(2)}/hour';
   }
 
-  String _coordinateText(double? value) {
-    if (value == null) return 'Not set';
-    return value.toStringAsFixed(6);
-  }
-
   String _formatTime(TimeOfDay time) {
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
@@ -160,6 +160,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
 
     final latValue = result['latitude'];
     final lngValue = result['longitude'];
+    final addressValue = result['locationAddress'];
 
     final pickedLat = latValue is num
         ? latValue.toDouble()
@@ -176,33 +177,20 @@ class _ProviderSettingsState extends State<ProviderSettings> {
       return;
     }
 
-    String resolvedAddress = 'Selected on map';
+    String resolvedAddress = addressValue?.toString().trim() ?? '';
 
-    try {
-      final placemarks = await placemarkFromCoordinates(pickedLat, pickedLng);
-
-      if (!mounted) return;
-
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-
-        final parts = [
-          p.street,
-          p.subLocality,
-          p.locality,
-          p.administrativeArea,
-          p.country,
-        ]
-            .where((e) => e != null && e.trim().isNotEmpty)
-            .map((e) => e!.trim())
-            .toList();
-
-        if (parts.isNotEmpty) {
-          resolvedAddress = parts.join(', ');
-        }
+    if (resolvedAddress.isEmpty) {
+      try {
+        resolvedAddress = await _locationService.reverseGeocode(
+          LatLng(pickedLat, pickedLng),
+        );
+      } catch (_) {
+        resolvedAddress = '';
       }
-    } catch (_) {
-      if (!mounted) return;
+    }
+
+    if (resolvedAddress.isEmpty) {
+      resolvedAddress = 'Selected on map';
     }
 
     if (!mounted) return;
@@ -250,6 +238,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
       );
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save settings: $e')),
       );
@@ -258,6 +247,49 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         setState(() => saving = false);
       }
     }
+  }
+
+  Future<void> _openEditOptions() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Edit Profile'),
+                subtitle: const Text(
+                  'Update name, service, description, and rate',
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+
+                  await Navigator.push(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProviderSetupScreen(),
+                    ),
+                  );
+
+                  if (!mounted) return;
+                  await _loadAvailability();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.map),
+                title: const Text('Edit Work Location'),
+                subtitle: const Text('Pick your work location on map'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _pickWorkLocationOnMap();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _logout() async {
@@ -306,7 +338,7 @@ class _ProviderSettingsState extends State<ProviderSettings> {
     );
   }
 
-  Widget _infoTile(String title, String value) {
+  Widget _summaryTile(String title, String value) {
     return Card(
       child: ListTile(
         title: Text(title),
@@ -329,18 +361,8 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            tooltip: "Edit Profile",
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ProviderSetupScreen(),
-                ),
-              );
-
-              if (!mounted) return;
-              _loadAvailability();
-            },
+            tooltip: "Edit",
+            onPressed: _openEditOptions,
           ),
         ],
       ),
@@ -350,38 +372,42 @@ class _ProviderSettingsState extends State<ProviderSettings> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Service Profile',
+              'Provider Summary',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 10),
-            _infoTile('Service Type', serviceType.isEmpty ? 'Not set' : serviceType),
-            _infoTile(
-              'Description',
-              serviceDescription.isEmpty ? 'Not set' : serviceDescription,
+            _summaryTile(
+              'Provider Name',
+              providerName.isEmpty ? 'Not set' : providerName,
             ),
-            _infoTile('Price Per Hour', _priceText(pricePerHour)),
-            _infoTile(
-              'Location Address',
-              locationAddress.isEmpty ? 'Not set' : locationAddress,
+            _summaryTile(
+              'Service',
+              serviceType.isEmpty ? 'Not set' : serviceType,
             ),
-            _infoTile('Latitude', _coordinateText(latitude)),
-            _infoTile('Longitude', _coordinateText(longitude)),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _pickWorkLocationOnMap,
-                icon: const Icon(Icons.map),
-                label: Text(
-                  latitude != null && longitude != null
-                      ? 'Update Work Location on Map'
-                      : 'Set Work Location on Map',
+            _summaryTile(
+              'Rate',
+              _priceText(pricePerHour),
+            ),
+            const SizedBox(height: 8),
+            if (locationAddress.isNotEmpty)
+              Text(
+                'Work location is set.',
+                style: TextStyle(
+                  color: Colors.green.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            else
+              Text(
+                'Work location is not set yet.',
+                style: TextStyle(
+                  color: Colors.orange.shade700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
             const SizedBox(height: 20),
             SwitchListTile(
               value: isAvailable,

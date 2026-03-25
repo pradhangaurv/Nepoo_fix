@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/request_service.dart';
+
 class ProviderRequest extends StatefulWidget {
   const ProviderRequest({super.key});
 
@@ -10,6 +12,8 @@ class ProviderRequest extends StatefulWidget {
 }
 
 class _ProviderRequestState extends State<ProviderRequest> {
+  final RequestService _requestService = RequestService();
+
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
 
@@ -75,56 +79,12 @@ class _ProviderRequestState extends State<ProviderRequest> {
     final provider = FirebaseAuth.instance.currentUser;
     if (provider == null) return;
 
-    final db = FirebaseFirestore.instance;
-    final requestRef = db.collection('service_requests').doc(requestId);
-    final providerRef = db.collection('users').doc(provider.uid);
-
     try {
-      await db.runTransaction((transaction) async {
-        final providerSnap = await transaction.get(providerRef);
-        final providerData = providerSnap.data() ?? <String, dynamic>{};
-
-        final currentRequestId = providerData['currentRequestId']?.toString();
-
-        transaction.update(requestRef, {
-          'status': status,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        if (status == 'accepted') {
-          if (currentRequestId != null &&
-              currentRequestId.isNotEmpty &&
-              currentRequestId != requestId) {
-            throw Exception('You already have an active request.');
-          }
-
-          transaction.update(providerRef, {
-            'isAvailable': false,
-            'currentRequestId': requestId,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }
-
-        if (status == 'completed') {
-          if (currentRequestId == requestId || currentRequestId == null) {
-            transaction.update(providerRef, {
-              'isAvailable': true,
-              'currentRequestId': null,
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-          }
-        }
-
-        if (status == 'rejected' || status == 'cancelled') {
-          if (currentRequestId == requestId) {
-            transaction.update(providerRef, {
-              'isAvailable': true,
-              'currentRequestId': null,
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-          }
-        }
-      });
+      await _requestService.updateProviderRequestStatus(
+        providerId: provider.uid,
+        requestId: requestId,
+        status: status,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,7 +301,7 @@ class _ProviderRequestState extends State<ProviderRequest> {
                             child: Text(
                               isAvailable
                                   ? 'You are currently available for new requests.'
-                                  : 'You are busy right now,complete it before accepting another one.',
+                                  : 'You are busy right now, complete it before accepting another one.',
                               style: TextStyle(
                                 color: isAvailable ? Colors.green : Colors.red,
                                 fontWeight: FontWeight.w600,
@@ -422,8 +382,14 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                 const SizedBox(height: 10),
                                 _infoLine('Service: ', serviceType),
                                 _infoLine('Problem: ', problem),
-                                _infoLine('Address: ', address.isEmpty ? 'Not provided' : address),
-                                _infoLine('Phone: ', userPhone.isEmpty ? 'Not provided' : userPhone),
+                                _infoLine(
+                                  'Address: ',
+                                  address.isEmpty ? 'Not provided' : address,
+                                ),
+                                _infoLine(
+                                  'Phone: ',
+                                  userPhone.isEmpty ? 'Not provided' : userPhone,
+                                ),
                                 _infoLine(
                                   'Latitude: ',
                                   _coordinateText(serviceLatitude),

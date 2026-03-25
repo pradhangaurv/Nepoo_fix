@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/request_service.dart';
 import 'review_page.dart';
 
 class Activity extends StatefulWidget {
@@ -12,6 +13,8 @@ class Activity extends StatefulWidget {
 }
 
 class _ActivityState extends State<Activity> {
+  final RequestService _requestService = RequestService();
+
   String selectedFilter = 'active';
 
   String _formatDate(dynamic value) {
@@ -19,6 +22,14 @@ class _ActivityState extends State<Activity> {
 
     final dt = value.toDate();
     return '${dt.day}/${dt.month}/${dt.year}  ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _errorText(Object error) {
+    final text = error.toString();
+    if (text.startsWith('Exception: ')) {
+      return text.substring('Exception: '.length);
+    }
+    return text;
   }
 
   Color _statusColor(String status) {
@@ -97,46 +108,8 @@ class _ActivityState extends State<Activity> {
 
     if (!mounted || confirm != true) return;
 
-    final db = FirebaseFirestore.instance;
-    final requestRef = db.collection('service_requests').doc(requestId);
-
     try {
-      await db.runTransaction((transaction) async {
-        final requestSnap = await transaction.get(requestRef);
-
-        if (!requestSnap.exists) {
-          throw Exception('Request not found');
-        }
-
-        final requestData = requestSnap.data() ?? <String, dynamic>{};
-        final status = (requestData['status'] ?? '').toString();
-        final providerId = (requestData['providerId'] ?? '').toString();
-
-        transaction.update(requestRef, {
-          'status': 'cancelled',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        if ((status == 'accepted' || status == 'on_the_way') &&
-            providerId.isNotEmpty) {
-          final providerRef = db.collection('users').doc(providerId);
-          final providerSnap = await transaction.get(providerRef);
-
-          if (providerSnap.exists) {
-            final providerData = providerSnap.data() ?? <String, dynamic>{};
-            final currentRequestId =
-            (providerData['currentRequestId'] ?? '').toString();
-
-            if (currentRequestId == requestId) {
-              transaction.update(providerRef, {
-                'isAvailable': true,
-                'currentRequestId': null,
-                'updatedAt': FieldValue.serverTimestamp(),
-              });
-            }
-          }
-        }
-      });
+      await _requestService.cancelCustomerRequest(requestId: requestId);
 
       if (!mounted) return;
 
@@ -147,7 +120,7 @@ class _ActivityState extends State<Activity> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to cancel request: $e')),
+        SnackBar(content: Text('Failed to cancel request: ${_errorText(e)}')),
       );
     }
   }

@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:latlong2/latlong.dart';
 
-import 'activity.dart';
+import '../../services/location_service.dart';
+import '../../services/request_service.dart';
 import '../../shared/screen/select_location_map.dart';
+import 'activity.dart';
 
 class ProviderDetailsPage extends StatefulWidget {
   final String providerId;
@@ -21,6 +23,8 @@ class ProviderDetailsPage extends StatefulWidget {
 class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
   final TextEditingController _problemController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final LocationService _locationService = LocationService();
+  final RequestService _requestService = RequestService();
 
   bool bookingLoading = false;
 
@@ -64,27 +68,15 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
 
   String _coordinateText(double? value) {
     if (value == null) return 'Not selected';
-    return value.toStringAsFixed(6);
+    return _locationService.formatCoordinate(value);
   }
 
-  Future<bool> _userHasActiveRequest(String userId) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('service_requests')
-        .where('userId', isEqualTo: userId)
-        .where(
-      'status',
-      whereIn: [
-        'pending',
-        'accepted',
-        'on_the_way',
-        'arrived',
-        'in_progress',
-      ],
-    )
-        .limit(1)
-        .get();
-
-    return snap.docs.isNotEmpty;
+  String _errorText(Object error) {
+    final text = error.toString();
+    if (text.startsWith('Exception: ')) {
+      return text.substring('Exception: '.length);
+    }
+    return text;
   }
 
   Future<void> _pickServiceLocationOnMap() async {
@@ -99,6 +91,7 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
 
     final latValue = result['latitude'];
     final lngValue = result['longitude'];
+    final addressValue = result['locationAddress'];
 
     final pickedLat = latValue is num
         ? latValue.toDouble()
@@ -115,36 +108,19 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
       return;
     }
 
-    String resolvedAddress = 'Selected on map';
+    String resolvedAddress = addressValue?.toString().trim() ?? '';
 
-    try {
-      final placemarks = await placemarkFromCoordinates(
-        pickedLat,
-        pickedLng,
-      );
-
-      if (!mounted) return;
-
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-
-        final parts = [
-          p.street,
-          p.subLocality,
-          p.locality,
-          p.administrativeArea,
-          p.country,
-        ]
-            .where((e) => e != null && e.trim().isNotEmpty)
-            .map((e) => e!.trim())
-            .toList();
-
-        if (parts.isNotEmpty) {
-          resolvedAddress = parts.join(', ');
-        }
+    if (resolvedAddress.isEmpty) {
+      try {
+        resolvedAddress = await _locationService.reverseGeocode(
+          LatLng(pickedLat, pickedLng),
+        );
+      } catch (_) {
+        resolvedAddress = '';
       }
-    } catch (_) {
-      if (!mounted) return;
+    }
+
+    if (resolvedAddress.isEmpty) {
       resolvedAddress = 'Selected on map';
     }
 
@@ -189,55 +165,20 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
       return;
     }
 
+    final providerId = widget.providerId;
+
     try {
       setState(() => bookingLoading = true);
 
-      final hasActiveRequest = await _userHasActiveRequest(user.uid);
-
-      if (!mounted) return;
-
-      if (hasActiveRequest) {
-        setState(() => bookingLoading = false);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'You already have an active service request. Please complete or cancel it first.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      final userSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (!mounted) return;
-
-      final userData = userSnap.data() ?? <String, dynamic>{};
-
-      await FirebaseFirestore.instance.collection('service_requests').add({
-        'userId': user.uid,
-        'userName': userData['name'] ?? 'User',
-        'userPhone': userData['phone'] ?? '',
-        'userAddress': userData['address'] ?? '',
-        'providerId': widget.providerId,
-        'providerName': providerData['name'] ?? 'Provider',
-        'providerPhone': providerData['phone'] ?? '',
-        'serviceType': providerData['serviceType'] ?? '',
-        'providerServiceDescription':
-        providerData['serviceDescription'] ?? '',
-        'pricePerHour': providerData['pricePerHour'],
-        'problemDescription': problem,
-        'serviceAddress': address,
-        'serviceLatitude': serviceLatitude,
-        'serviceLongitude': serviceLongitude,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await _requestService.createServiceRequest(
+        userId: user.uid,
+        providerId: providerId,
+        providerData: providerData,
+        problemDescription: problem,
+        serviceAddress: address,
+        serviceLatitude: serviceLatitude!,
+        serviceLongitude: serviceLongitude!,
+      );
 
       if (!mounted) return;
 
@@ -264,7 +205,7 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
       setState(() => bookingLoading = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Booking failed: $e')),
+        SnackBar(content: Text('Booking failed: ${_errorText(e)}')),
       );
     }
   }
