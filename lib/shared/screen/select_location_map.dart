@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+
+import '../../services/location_service.dart';
 
 class SelectLocationMapPage extends StatefulWidget {
   const SelectLocationMapPage({super.key});
@@ -14,6 +14,7 @@ class SelectLocationMapPage extends StatefulWidget {
 class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
+  final LocationService _locationService = LocationService();
 
   bool _loading = true;
   bool _searching = false;
@@ -24,8 +25,6 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
 
   LatLng? _currentLatLng;
   LatLng? _selectedLatLng;
-
-  static const LatLng _fallbackLatLng = LatLng(27.7172, 85.3240); // Kathmandu
 
   @override
   void initState() {
@@ -39,59 +38,22 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
     super.dispose();
   }
 
-  Future<bool> _handlePermission() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enable location services.')),
-      );
-      return false;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permission is required.')),
-      );
-      return false;
-    }
-
-    return true;
-  }
-
   Future<void> _loadCurrentLocation() async {
     try {
-      final granted = await _handlePermission();
+      final current = await _locationService.getCurrentLatLng();
 
       if (!mounted) return;
 
-      if (!granted) {
+      if (current == null) {
         setState(() {
           _loading = false;
           _errorMessage = 'Location permission not granted.';
-          _selectedLatLng = _fallbackLatLng;
+          _selectedLatLng = LocationService.fallbackLatLng;
         });
-        await _updateSelectedAddress(_fallbackLatLng);
+
+        await _updateSelectedAddress(LocationService.fallbackLatLng);
         return;
       }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      if (!mounted) return;
-
-      final current = LatLng(position.latitude, position.longitude);
 
       setState(() {
         _currentLatLng = current;
@@ -112,27 +74,25 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
       setState(() {
         _loading = false;
         _errorMessage = 'Failed to load location.';
-        _selectedLatLng = _fallbackLatLng;
+        _selectedLatLng = LocationService.fallbackLatLng;
       });
 
-      await _updateSelectedAddress(_fallbackLatLng);
+      await _updateSelectedAddress(LocationService.fallbackLatLng);
     }
   }
 
   Future<void> _goToCurrentLocation() async {
     try {
-      final granted = await _handlePermission();
-      if (!mounted || !granted) return;
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      final current = await _locationService.getCurrentLatLng();
 
       if (!mounted) return;
 
-      final current = LatLng(position.latitude, position.longitude);
+      if (current == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not get current location.')),
+        );
+        return;
+      }
 
       setState(() {
         _currentLatLng = current;
@@ -144,6 +104,7 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
       await _updateSelectedAddress(current);
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not get current location.')),
       );
@@ -166,11 +127,11 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
         _errorMessage = null;
       });
 
-      final results = await locationFromAddress(query);
+      final point = await _locationService.searchAddress(query);
 
       if (!mounted) return;
 
-      if (results.isEmpty) {
+      if (point == null) {
         setState(() {
           _searching = false;
         });
@@ -180,9 +141,6 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
         );
         return;
       }
-
-      final first = results.first;
-      final point = LatLng(first.latitude, first.longitude);
 
       setState(() {
         _selectedLatLng = point;
@@ -212,33 +170,9 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
         _resolvingAddress = true;
       });
 
-      final placemarks = await placemarkFromCoordinates(
-        point.latitude,
-        point.longitude,
-      );
+      final address = await _locationService.reverseGeocode(point);
 
       if (!mounted) return;
-
-      String address = '';
-
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-
-        final parts = [
-          p.street,
-          p.subLocality,
-          p.locality,
-          p.administrativeArea,
-          p.country,
-        ]
-            .where((e) => e != null && e.trim().isNotEmpty)
-            .map((e) => e!.trim())
-            .toList();
-
-        if (parts.isNotEmpty) {
-          address = parts.join(', ');
-        }
-      }
 
       setState(() {
         _selectedAddress = address;
@@ -315,12 +249,12 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
   }
 
   String _coordinateText(double value) {
-    return value.toStringAsFixed(6);
+    return _locationService.formatCoordinate(value);
   }
 
   @override
   Widget build(BuildContext context) {
-    final center = _selectedLatLng ?? _fallbackLatLng;
+    final center = _selectedLatLng ?? LocationService.fallbackLatLng;
 
     return Scaffold(
       appBar: AppBar(
@@ -407,8 +341,10 @@ class _SelectLocationMapPageState extends State<SelectLocationMapPage> {
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline,
-                              color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(child: Text(_errorMessage!)),
                         ],
