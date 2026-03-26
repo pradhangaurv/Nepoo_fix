@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/request_service.dart';
+import '../../shared/screen/chat_page.dart';
 
 class ProviderRequest extends StatefulWidget {
   const ProviderRequest({super.key});
@@ -64,15 +65,11 @@ class _ProviderRequestState extends State<ProviderRequest> {
         status == 'in_progress';
   }
 
-  double? _toDouble(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString());
-  }
-
-  String _coordinateText(double? value) {
-    if (value == null) return 'Not available';
-    return value.toStringAsFixed(6);
+  bool _canChat(String status) {
+    return status == 'accepted' ||
+        status == 'on_the_way' ||
+        status == 'arrived' ||
+        status == 'in_progress';
   }
 
   Future<void> _updateStatus(String requestId, String status) async {
@@ -127,6 +124,34 @@ class _ProviderRequestState extends State<ProviderRequest> {
     if (confirm == true) {
       await _updateStatus(requestId, status);
     }
+  }
+
+  void _openChatPage({
+    required String requestId,
+    required String customerId,
+    required String providerId,
+    required String customerName,
+    required String customerPhone,
+    required String status,
+  }) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPage(
+          requestId: requestId,
+          customerId: customerId,
+          providerId: providerId,
+          currentUserId: currentUser.uid,
+          currentUserRole: 'provider',
+          otherUserName: customerName,
+          otherUserPhone: customerPhone,
+          requestStatus: status,
+        ),
+      ),
+    );
   }
 
   Widget _summaryCard(String title, String value, IconData icon, Color color) {
@@ -323,6 +348,8 @@ class _ProviderRequestState extends State<ProviderRequest> {
                         final status = (data['status'] ?? 'pending').toString();
                         final userName = data['userName']?.toString() ?? 'User';
                         final userPhone = data['userPhone']?.toString() ?? '';
+                        final userId = data['userId']?.toString() ?? '';
+                        final providerId = data['providerId']?.toString() ?? '';
                         final serviceType =
                             data['serviceType']?.toString() ?? 'Service';
                         final problem =
@@ -330,11 +357,6 @@ class _ProviderRequestState extends State<ProviderRequest> {
                         final address =
                             data['serviceAddress']?.toString() ?? '';
                         final createdAt = data['createdAt'];
-
-                        final serviceLatitude =
-                        _toDouble(data['serviceLatitude']);
-                        final serviceLongitude =
-                        _toDouble(data['serviceLongitude']);
 
                         final isCurrentAssignedRequest =
                             currentRequestId == doc.id;
@@ -391,14 +413,6 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                   userPhone.isEmpty ? 'Not provided' : userPhone,
                                 ),
                                 _infoLine(
-                                  'Latitude: ',
-                                  _coordinateText(serviceLatitude),
-                                ),
-                                _infoLine(
-                                  'Longitude: ',
-                                  _coordinateText(serviceLongitude),
-                                ),
-                                _infoLine(
                                   'Requested: ',
                                   _formatDate(createdAt),
                                 ),
@@ -444,6 +458,21 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                           foregroundColor: Colors.white,
                                         ),
                                         child: const Text('Reject'),
+                                      ),
+                                    if (_canChat(status) &&
+                                        userId.isNotEmpty &&
+                                        providerId.isNotEmpty)
+                                      ElevatedButton.icon(
+                                        onPressed: () => _openChatPage(
+                                          requestId: doc.id,
+                                          customerId: userId,
+                                          providerId: providerId,
+                                          customerName: userName,
+                                          customerPhone: userPhone,
+                                          status: status,
+                                        ),
+                                        icon: const Icon(Icons.chat),
+                                        label: const Text('Chat'),
                                       ),
                                     if (status == 'accepted')
                                       ElevatedButton(

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/request_service.dart';
+import '../../shared/screen/chat_page.dart';
 import 'review_page.dart';
 
 class Activity extends StatefulWidget {
@@ -81,6 +82,13 @@ class _ActivityState extends State<Activity> {
         status == 'on_the_way';
   }
 
+  bool _canChat(String status) {
+    return status == 'accepted' ||
+        status == 'on_the_way' ||
+        status == 'arrived' ||
+        status == 'in_progress';
+  }
+
   Future<void> _cancelRequest(String requestId) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -156,11 +164,41 @@ class _ActivityState extends State<Activity> {
     );
   }
 
+  void _openChatPage({
+    required String requestId,
+    required String customerId,
+    required String providerId,
+    required String providerName,
+    required String providerPhone,
+    required String status,
+  }) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPage(
+          requestId: requestId,
+          customerId: customerId,
+          providerId: providerId,
+          currentUserId: currentUser.uid,
+          currentUserRole: 'customer',
+          otherUserName: providerName,
+          otherUserPhone: providerPhone,
+          requestStatus: status,
+        ),
+      ),
+    );
+  }
+
   Widget _buildRequestCard(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
     final status = (data['status'] ?? 'pending').toString();
     final providerName = data['providerName']?.toString() ?? 'Provider';
     final providerId = data['providerId']?.toString() ?? '';
+    final providerPhone = data['providerPhone']?.toString() ?? '';
+    final customerId = data['userId']?.toString() ?? '';
     final serviceType = data['serviceType']?.toString() ?? 'Service';
     final problem = data['problemDescription']?.toString() ?? '';
     final address = data['serviceAddress']?.toString() ?? '';
@@ -227,6 +265,21 @@ class _ActivityState extends State<Activity> {
                       foregroundColor: Colors.white,
                     ),
                     child: const Text('Cancel Request'),
+                  ),
+                if (_canChat(status) &&
+                    providerId.isNotEmpty &&
+                    customerId.isNotEmpty)
+                  ElevatedButton.icon(
+                    onPressed: () => _openChatPage(
+                      requestId: doc.id,
+                      customerId: customerId,
+                      providerId: providerId,
+                      providerName: providerName,
+                      providerPhone: providerPhone,
+                      status: status,
+                    ),
+                    icon: const Icon(Icons.chat),
+                    label: const Text('Chat'),
                   ),
                 if (status == 'completed' && providerId.isNotEmpty)
                   ElevatedButton(
