@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/chat_service.dart';
 import '../../services/request_service.dart';
 import '../../shared/screen/chat_page.dart';
 
@@ -14,6 +15,7 @@ class ProviderRequest extends StatefulWidget {
 
 class _ProviderRequestState extends State<ProviderRequest> {
   final RequestService _requestService = RequestService();
+  final ChatService _chatService = ChatService();
 
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
@@ -66,10 +68,7 @@ class _ProviderRequestState extends State<ProviderRequest> {
   }
 
   bool _canChat(String status) {
-    return status == 'accepted' ||
-        status == 'on_the_way' ||
-        status == 'arrived' ||
-        status == 'in_progress';
+    return _chatService.canChatForStatus(status);
   }
 
   Future<void> _updateStatus(String requestId, String status) async {
@@ -184,6 +183,70 @@ class _ProviderRequestState extends State<ProviderRequest> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Text('$label$value'),
+    );
+  }
+
+  Widget _buildUnreadBadge(int count) {
+    return Positioned(
+      right: -6,
+      top: -6,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+        constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+        child: Text(
+          count > 99 ? '99+' : '$count',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatButton({
+    required String requestId,
+    required String customerId,
+    required String providerId,
+    required String customerName,
+    required String customerPhone,
+    required String status,
+    required String currentUserId,
+  }) {
+    return StreamBuilder<int>(
+      stream: _chatService.streamUnreadCount(
+        requestId: requestId,
+        currentUserId: currentUserId,
+      ),
+      builder: (context, snap) {
+        final unread = snap.data ?? 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _openChatPage(
+                requestId: requestId,
+                customerId: customerId,
+                providerId: providerId,
+                customerName: customerName,
+                customerPhone: customerPhone,
+                status: status,
+              ),
+              icon: const Icon(Icons.chat),
+              label: const Text('Chat'),
+            ),
+            if (unread > 0) _buildUnreadBadge(unread),
+          ],
+        );
+      },
     );
   }
 
@@ -462,17 +525,14 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                     if (_canChat(status) &&
                                         userId.isNotEmpty &&
                                         providerId.isNotEmpty)
-                                      ElevatedButton.icon(
-                                        onPressed: () => _openChatPage(
-                                          requestId: doc.id,
-                                          customerId: userId,
-                                          providerId: providerId,
-                                          customerName: userName,
-                                          customerPhone: userPhone,
-                                          status: status,
-                                        ),
-                                        icon: const Icon(Icons.chat),
-                                        label: const Text('Chat'),
+                                      _buildChatButton(
+                                        requestId: doc.id,
+                                        customerId: userId,
+                                        providerId: providerId,
+                                        customerName: userName,
+                                        customerPhone: userPhone,
+                                        status: status,
+                                        currentUserId: user.uid,
                                       ),
                                     if (status == 'accepted')
                                       ElevatedButton(

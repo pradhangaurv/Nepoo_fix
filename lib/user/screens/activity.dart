@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/chat_service.dart';
 import '../../services/request_service.dart';
 import '../../shared/screen/chat_page.dart';
 import 'review_page.dart';
@@ -15,6 +16,7 @@ class Activity extends StatefulWidget {
 
 class _ActivityState extends State<Activity> {
   final RequestService _requestService = RequestService();
+  final ChatService _chatService = ChatService();
 
   String selectedFilter = 'active';
 
@@ -83,10 +85,7 @@ class _ActivityState extends State<Activity> {
   }
 
   bool _canChat(String status) {
-    return status == 'accepted' ||
-        status == 'on_the_way' ||
-        status == 'arrived' ||
-        status == 'in_progress';
+    return _chatService.canChatForStatus(status);
   }
 
   Future<void> _cancelRequest(String requestId) async {
@@ -192,7 +191,74 @@ class _ActivityState extends State<Activity> {
     );
   }
 
-  Widget _buildRequestCard(DocumentSnapshot<Map<String, dynamic>> doc) {
+  Widget _buildUnreadBadge(int count) {
+    return Positioned(
+      right: -6,
+      top: -6,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+        constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+        child: Text(
+          count > 99 ? '99+' : '$count',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatButton({
+    required String requestId,
+    required String customerId,
+    required String providerId,
+    required String providerName,
+    required String providerPhone,
+    required String status,
+    required String currentUserId,
+  }) {
+    return StreamBuilder<int>(
+      stream: _chatService.streamUnreadCount(
+        requestId: requestId,
+        currentUserId: currentUserId,
+      ),
+      builder: (context, snap) {
+        final unread = snap.data ?? 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _openChatPage(
+                requestId: requestId,
+                customerId: customerId,
+                providerId: providerId,
+                providerName: providerName,
+                providerPhone: providerPhone,
+                status: status,
+              ),
+              icon: const Icon(Icons.chat),
+              label: const Text('Chat'),
+            ),
+            if (unread > 0) _buildUnreadBadge(unread),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRequestCard(
+      DocumentSnapshot<Map<String, dynamic>> doc,
+      String currentUserId,
+      ) {
     final data = doc.data()!;
     final status = (data['status'] ?? 'pending').toString();
     final providerName = data['providerName']?.toString() ?? 'Provider';
@@ -269,17 +335,14 @@ class _ActivityState extends State<Activity> {
                 if (_canChat(status) &&
                     providerId.isNotEmpty &&
                     customerId.isNotEmpty)
-                  ElevatedButton.icon(
-                    onPressed: () => _openChatPage(
-                      requestId: doc.id,
-                      customerId: customerId,
-                      providerId: providerId,
-                      providerName: providerName,
-                      providerPhone: providerPhone,
-                      status: status,
-                    ),
-                    icon: const Icon(Icons.chat),
-                    label: const Text('Chat'),
+                  _buildChatButton(
+                    requestId: doc.id,
+                    customerId: customerId,
+                    providerId: providerId,
+                    providerName: providerName,
+                    providerPhone: providerPhone,
+                    status: status,
+                    currentUserId: currentUserId,
                   ),
                 if (status == 'completed' && providerId.isNotEmpty)
                   ElevatedButton(
@@ -385,7 +448,10 @@ class _ActivityState extends State<Activity> {
                   padding: const EdgeInsets.all(12),
                   itemCount: docsToShow.length,
                   itemBuilder: (context, index) {
-                    return _buildRequestCard(docsToShow[index]);
+                    return _buildRequestCard(
+                      docsToShow[index],
+                      user.uid,
+                    );
                   },
                 ),
               ),

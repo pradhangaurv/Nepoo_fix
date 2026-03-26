@@ -118,12 +118,17 @@ class RequestService {
   }) async {
     final requestRef = _db.collection('service_requests').doc(requestId);
     final providerRef = _db.collection('users').doc(providerId);
+    final chatRef = _db.collection('chats').doc(requestId);
 
     await _db.runTransaction((transaction) async {
       final providerSnap = await transaction.get(providerRef);
+      final requestSnap = await transaction.get(requestRef);
+
       final providerData = providerSnap.data() ?? <String, dynamic>{};
+      final requestData = requestSnap.data() ?? <String, dynamic>{};
 
       final currentRequestId = providerData['currentRequestId']?.toString();
+      final customerId = requestData['userId']?.toString() ?? '';
 
       transaction.update(requestRef, {
         'status': status,
@@ -142,6 +147,20 @@ class RequestService {
           'currentRequestId': requestId,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+
+        transaction.set(
+          chatRef,
+          {
+            'requestId': requestId,
+            'customerId': customerId,
+            'providerId': providerId,
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastMessage': '',
+            'lastMessageAt': null,
+            'lastSenderId': '',
+          },
+          SetOptions(merge: true),
+        );
       }
 
       if (status == 'completed') {

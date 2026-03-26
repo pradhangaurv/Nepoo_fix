@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -34,6 +36,8 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messageSubscription;
+
   bool _sending = false;
   bool _initializing = true;
   String? _initError;
@@ -51,6 +55,20 @@ class _ChatPageState extends State<ChatPage> {
         customerId: widget.customerId,
         providerId: widget.providerId,
       );
+
+      await _chatService.markMessagesAsRead(
+        requestId: widget.requestId,
+        currentUserId: widget.currentUserId,
+      );
+
+      _messageSubscription = _chatService
+          .streamMessages(requestId: widget.requestId)
+          .listen((_) async {
+        await _chatService.markMessagesAsRead(
+          requestId: widget.requestId,
+          currentUserId: widget.currentUserId,
+        );
+      });
 
       if (!mounted) return;
 
@@ -70,6 +88,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _messageSubscription?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();

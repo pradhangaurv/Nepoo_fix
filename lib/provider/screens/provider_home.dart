@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../services/chat_service.dart';
 import '../../services/location_service.dart';
 import '../../services/route_service.dart';
+import '../../shared/screen/chat_page.dart';
 
 class ProviderHome extends StatefulWidget {
   const ProviderHome({super.key});
@@ -17,6 +19,7 @@ class ProviderHome extends StatefulWidget {
 class _ProviderHomeState extends State<ProviderHome> {
   final LocationService _locationService = LocationService();
   final RouteService _routeService = RouteService();
+  final ChatService _chatService = ChatService();
 
   LatLng? _providerCurrentLatLng;
   bool _loadingLocation = true;
@@ -52,7 +55,7 @@ class _ProviderHomeState extends State<ProviderHome> {
         _loadingLocation = false;
         _locationError = null;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
@@ -89,7 +92,7 @@ class _ProviderHomeState extends State<ProviderHome> {
         _loadingRoute = false;
         _routeError = points.isEmpty ? 'No route found.' : null;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
@@ -193,6 +196,98 @@ class _ProviderHomeState extends State<ProviderHome> {
     );
   }
 
+  void _openChatPage({
+    required String requestId,
+    required String customerId,
+    required String providerId,
+    required String customerName,
+    required String customerPhone,
+    required String status,
+  }) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPage(
+          requestId: requestId,
+          customerId: customerId,
+          providerId: providerId,
+          currentUserId: currentUser.uid,
+          currentUserRole: 'provider',
+          otherUserName: customerName,
+          otherUserPhone: customerPhone,
+          requestStatus: status,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnreadBadge(int count) {
+    return Positioned(
+      right: -6,
+      top: -6,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+        constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+        child: Text(
+          count > 99 ? '99+' : '$count',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatButton({
+    required String requestId,
+    required String customerId,
+    required String providerId,
+    required String customerName,
+    required String customerPhone,
+    required String status,
+    required String currentUserId,
+  }) {
+    return StreamBuilder<int>(
+      stream: _chatService.streamUnreadCount(
+        requestId: requestId,
+        currentUserId: currentUserId,
+      ),
+      builder: (context, snap) {
+        final unread = snap.data ?? 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _openChatPage(
+                requestId: requestId,
+                customerId: customerId,
+                providerId: providerId,
+                customerName: customerName,
+                customerPhone: customerPhone,
+                status: status,
+              ),
+              icon: const Icon(Icons.chat),
+              label: const Text('Chat'),
+            ),
+            if (unread > 0) _buildUnreadBadge(unread),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildNoActiveMapCard(bool isAvailable) {
     return Card(
       child: Padding(
@@ -215,10 +310,17 @@ class _ProviderHomeState extends State<ProviderHome> {
   }
 
   Widget _buildArrivedCard({
+    required String requestId,
     required String status,
+    required String customerId,
+    required String providerId,
     required String customerName,
+    required String customerPhone,
     required String serviceAddress,
   }) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUserId = currentUser?.uid ?? '';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -245,6 +347,20 @@ class _ProviderHomeState extends State<ProviderHome> {
               'Location: ',
               serviceAddress.isEmpty ? 'Not provided' : serviceAddress,
             ),
+            const SizedBox(height: 12),
+            if (_chatService.canChatForStatus(status) &&
+                customerId.isNotEmpty &&
+                providerId.isNotEmpty &&
+                currentUserId.isNotEmpty)
+              _buildChatButton(
+                requestId: requestId,
+                customerId: customerId,
+                providerId: providerId,
+                customerName: customerName,
+                customerPhone: customerPhone,
+                status: status,
+                currentUserId: currentUserId,
+              ),
           ],
         ),
       ),
@@ -252,12 +368,19 @@ class _ProviderHomeState extends State<ProviderHome> {
   }
 
   Widget _buildMapCard({
+    required String requestId,
     required String status,
+    required String customerId,
+    required String providerId,
     required String customerName,
+    required String customerPhone,
     required String serviceAddress,
     required double? customerLat,
     required double? customerLng,
   }) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUserId = currentUser?.uid ?? '';
+
     if (customerLat == null || customerLng == null) {
       return Card(
         child: Padding(
@@ -287,6 +410,20 @@ class _ProviderHomeState extends State<ProviderHome> {
               ),
               const SizedBox(height: 8),
               const Text('Customer location is not available for this request.'),
+              const SizedBox(height: 12),
+              if (_chatService.canChatForStatus(status) &&
+                  customerId.isNotEmpty &&
+                  providerId.isNotEmpty &&
+                  currentUserId.isNotEmpty)
+                _buildChatButton(
+                  requestId: requestId,
+                  customerId: customerId,
+                  providerId: providerId,
+                  customerName: customerName,
+                  customerPhone: customerPhone,
+                  status: status,
+                  currentUserId: currentUserId,
+                ),
             ],
           ),
         ),
@@ -298,7 +435,6 @@ class _ProviderHomeState extends State<ProviderHome> {
     if (_providerCurrentLatLng != null) {
       final key =
           '${_providerCurrentLatLng!.latitude},${_providerCurrentLatLng!.longitude}->${customerLatLng.latitude},${customerLatLng.longitude}';
-
       if (_routeKey != key && !_loadingRoute) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -441,20 +577,38 @@ class _ProviderHomeState extends State<ProviderHome> {
               ),
             ),
             const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () async {
-                await _loadProviderCurrentLocation();
-                if (!mounted) return;
-
-                if (_providerCurrentLatLng != null) {
-                  await _loadRoute(
-                    from: _providerCurrentLatLng!,
-                    to: customerLatLng,
-                  );
-                }
-              },
-              icon: const Icon(Icons.my_location),
-              label: const Text('Refresh My Location'),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await _loadProviderCurrentLocation();
+                    if (!mounted) return;
+                    if (_providerCurrentLatLng != null) {
+                      await _loadRoute(
+                        from: _providerCurrentLatLng!,
+                        to: customerLatLng,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.my_location),
+                  label: const Text('Refresh My Location'),
+                ),
+                if (_chatService.canChatForStatus(status) &&
+                    customerId.isNotEmpty &&
+                    providerId.isNotEmpty &&
+                    currentUserId.isNotEmpty)
+                  _buildChatButton(
+                    requestId: requestId,
+                    customerId: customerId,
+                    providerId: providerId,
+                    customerName: customerName,
+                    customerPhone: customerPhone,
+                    status: status,
+                    currentUserId: currentUserId,
+                  ),
+              ],
             ),
           ],
         ),
@@ -590,6 +744,12 @@ class _ProviderHomeState extends State<ProviderHome> {
                       final status = (requestData['status'] ?? '').toString();
                       final customerName =
                           requestData['userName']?.toString() ?? 'Customer';
+                      final customerPhone =
+                          requestData['userPhone']?.toString() ?? '';
+                      final customerId =
+                          requestData['userId']?.toString() ?? '';
+                      final providerId =
+                          requestData['providerId']?.toString() ?? '';
                       final serviceAddress =
                           requestData['serviceAddress']?.toString() ?? '';
                       final customerLat =
@@ -599,8 +759,12 @@ class _ProviderHomeState extends State<ProviderHome> {
 
                       if (_showMapForStatus(status)) {
                         return _buildMapCard(
+                          requestId: requestSnap.data!.id,
                           status: status,
+                          customerId: customerId,
+                          providerId: providerId,
                           customerName: customerName,
+                          customerPhone: customerPhone,
                           serviceAddress: serviceAddress,
                           customerLat: customerLat,
                           customerLng: customerLng,
@@ -609,8 +773,12 @@ class _ProviderHomeState extends State<ProviderHome> {
 
                       if (_hasActiveJobWithoutMap(status)) {
                         return _buildArrivedCard(
+                          requestId: requestSnap.data!.id,
                           status: status,
+                          customerId: customerId,
+                          providerId: providerId,
                           customerName: customerName,
+                          customerPhone: customerPhone,
                           serviceAddress: serviceAddress,
                         );
                       }
