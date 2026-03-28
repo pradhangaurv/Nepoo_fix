@@ -84,13 +84,18 @@ class RequestService {
       final status = (requestData['status'] ?? '').toString();
       final providerId = (requestData['providerId'] ?? '').toString();
 
+      if (status != 'pending' && status != 'accepted') {
+        throw Exception(
+          'Only pending or accepted requests can be cancelled.',
+        );
+      }
+
       transaction.update(requestRef, {
         'status': 'cancelled',
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      if ((status == 'accepted' || status == 'on_the_way') &&
-          providerId.isNotEmpty) {
+      if (status == 'accepted' && providerId.isNotEmpty) {
         final providerRef = _db.collection('users').doc(providerId);
         final providerSnap = await transaction.get(providerRef);
 

@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/chat_service.dart';
-import '../../services/request_service.dart';
 import '../../shared/screen/chat_page.dart';
 import 'review_page.dart';
 
@@ -15,7 +14,6 @@ class Activity extends StatefulWidget {
 }
 
 class _ActivityState extends State<Activity> {
-  final RequestService _requestService = RequestService();
   final ChatService _chatService = ChatService();
 
   String selectedFilter = 'active';
@@ -25,14 +23,6 @@ class _ActivityState extends State<Activity> {
 
     final dt = value.toDate();
     return '${dt.day}/${dt.month}/${dt.year}  ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _errorText(Object error) {
-    final text = error.toString();
-    if (text.startsWith('Exception: ')) {
-      return text.substring('Exception: '.length);
-    }
-    return text;
   }
 
   Color _statusColor(String status) {
@@ -79,16 +69,17 @@ class _ActivityState extends State<Activity> {
   }
 
   bool _canCancel(String status) {
-    return status == 'pending' ||
-        status == 'accepted' ||
-        status == 'on_the_way';
+    return status == 'pending';
   }
 
   bool _canChat(String status) {
     return _chatService.canChatForStatus(status);
   }
 
-  Future<void> _cancelRequest(String requestId) async {
+  Future<void> _cancelRequest({
+    required String requestId,
+    required String status,
+  }) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -113,10 +104,26 @@ class _ActivityState extends State<Activity> {
       },
     );
 
-    if (!mounted || confirm != true) return;
+    if (confirm != true) return;
+
+    if (status != 'pending') {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only pending requests can be cancelled.'),
+        ),
+      );
+      return;
+    }
 
     try {
-      await _requestService.cancelCustomerRequest(requestId: requestId);
+      await FirebaseFirestore.instance
+          .collection('service_requests')
+          .doc(requestId)
+          .update({
+        'status': 'cancelled',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
       if (!mounted) return;
 
@@ -127,7 +134,7 @@ class _ActivityState extends State<Activity> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to cancel request: ${_errorText(e)}')),
+        SnackBar(content: Text('Failed to cancel request: $e')),
       );
     }
   }
@@ -163,16 +170,23 @@ class _ActivityState extends State<Activity> {
     );
   }
 
-  void _openChatPage({
+  Future<void> _openChatPage({
     required String requestId,
     required String customerId,
     required String providerId,
     required String providerName,
     required String providerPhone,
     required String status,
-  }) {
+  }) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
+
+    await _chatService.markMessagesAsRead(
+      requestId: requestId,
+      currentUserId: currentUser.uid,
+    );
+
+    if (!mounted) return;
 
     Navigator.push(
       context,
@@ -191,47 +205,22 @@ class _ActivityState extends State<Activity> {
     );
   }
 
-  Widget _buildUnreadBadge(int count) {
-    return Positioned(
-      right: -6,
-      top: -6,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: const BoxDecoration(
-          color: Colors.red,
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-        constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatButton({
+  Widget _buildChatButtonWithBadge({
     required String requestId,
+    required String currentUserId,
     required String customerId,
     required String providerId,
     required String providerName,
     required String providerPhone,
     required String status,
-    required String currentUserId,
   }) {
     return StreamBuilder<int>(
       stream: _chatService.streamUnreadCount(
         requestId: requestId,
         currentUserId: currentUserId,
       ),
-      builder: (context, snap) {
-        final unread = snap.data ?? 0;
+      builder: (context, snapshot) {
+        final unreadCount = snapshot.data ?? 0;
 
         return Stack(
           clipBehavior: Clip.none,
@@ -248,17 +237,44 @@ class _ActivityState extends State<Activity> {
               icon: const Icon(Icons.chat),
               label: const Text('Chat'),
             ),
-            if (unread > 0) _buildUnreadBadge(unread),
+            if (unreadCount > 0)
+              Positioned(
+                right: -6,
+                top: -6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },
     );
   }
 
-  Widget _buildRequestCard(
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      String currentUserId,
-      ) {
+  Widget _buildRequestCard(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUserId = currentUser?.uid ?? '';
+
     final data = doc.data()!;
     final status = (data['status'] ?? 'pending').toString();
     final providerName = data['providerName']?.toString() ?? 'Provider';
@@ -325,7 +341,10 @@ class _ActivityState extends State<Activity> {
               children: [
                 if (_canCancel(status))
                   ElevatedButton(
-                    onPressed: () => _cancelRequest(doc.id),
+                    onPressed: () => _cancelRequest(
+                      requestId: doc.id,
+                      status: status,
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
@@ -334,15 +353,16 @@ class _ActivityState extends State<Activity> {
                   ),
                 if (_canChat(status) &&
                     providerId.isNotEmpty &&
-                    customerId.isNotEmpty)
-                  _buildChatButton(
+                    customerId.isNotEmpty &&
+                    currentUserId.isNotEmpty)
+                  _buildChatButtonWithBadge(
                     requestId: doc.id,
+                    currentUserId: currentUserId,
                     customerId: customerId,
                     providerId: providerId,
                     providerName: providerName,
                     providerPhone: providerPhone,
                     status: status,
-                    currentUserId: currentUserId,
                   ),
                 if (status == 'completed' && providerId.isNotEmpty)
                   ElevatedButton(
@@ -448,10 +468,7 @@ class _ActivityState extends State<Activity> {
                   padding: const EdgeInsets.all(12),
                   itemCount: docsToShow.length,
                   itemBuilder: (context, index) {
-                    return _buildRequestCard(
-                      docsToShow[index],
-                      user.uid,
-                    );
+                    return _buildRequestCard(docsToShow[index]);
                   },
                 ),
               ),
