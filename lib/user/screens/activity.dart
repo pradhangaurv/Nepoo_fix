@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/chat_service.dart';
 import '../../shared/screen/chat_page.dart';
+import '../../shared/widgets/notification_bell.dart';
 import 'review_page.dart';
 
 class Activity extends StatefulWidget {
@@ -393,7 +394,12 @@ class _ActivityState extends State<Activity> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Requests')),
+      appBar: AppBar(
+        title: const Text('My Requests'),
+        actions: const [
+          NotificationBell(),
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('service_requests')

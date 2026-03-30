@@ -1,5 +1,8 @@
 const admin = require('firebase-admin');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+} = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const logger = require('firebase-functions/logger');
 
@@ -8,12 +11,28 @@ const db = admin.firestore();
 
 const REQUEST_TIMEOUT_MINUTES = 1;
 
+async function saveInAppNotification(userId, { title, body, data = {} }) {
+  await db
+    .collection('users')
+    .doc(userId)
+    .collection('notifications')
+    .add({
+      title,
+      body,
+      data,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+}
+
 async function sendToUserTokens(userId, { title, body, data = {} }) {
   const userSnap = await db.collection('users').doc(userId).get();
   if (!userSnap.exists) {
     logger.info(`User ${userId} not found`);
     return;
   }
+
+  await saveInAppNotification(userId, { title, body, data });
 
   const userData = userSnap.data() || {};
   const tokens = Array.isArray(userData.fcmTokens) ? userData.fcmTokens : [];
@@ -68,6 +87,58 @@ async function sendToUserTokens(userId, { title, body, data = {} }) {
   }
 }
 
+function getStatusNotificationContent(status, providerName, serviceType) {
+  const safeProvider = providerName || 'Provider';
+  const safeService = serviceType || 'service';
+
+  switch (status) {
+    case 'accepted':
+      return {
+        title: 'Request accepted',
+        body: `${safeProvider} accepted your ${safeService} request.`,
+      };
+
+    case 'rejected':
+      return {
+        title: 'Request rejected',
+        body: `${safeProvider} rejected your ${safeService} request.`,
+      };
+
+    case 'on_the_way':
+      return {
+        title: 'Provider is on the way',
+        body: `${safeProvider} is on the way for your ${safeService}.`,
+      };
+
+    case 'arrived':
+      return {
+        title: 'Provider arrived',
+        body: `${safeProvider} has arrived at your location.`,
+      };
+
+    case 'in_progress':
+      return {
+        title: 'Service started',
+        body: `${safeProvider} started your ${safeService}.`,
+      };
+
+    case 'completed':
+      return {
+        title: 'Service completed',
+        body: `${safeProvider} completed your ${safeService}.`,
+      };
+
+    case 'cancelled':
+      return {
+        title: 'Request cancelled',
+        body: `Your ${safeService} request was cancelled.`,
+      };
+
+    default:
+      return null;
+  }
+}
+
 exports.notifyProviderOnBookingCreated = onDocumentCreated(
   {
     document: 'service_requests/{requestId}',
@@ -118,6 +189,74 @@ exports.notifyProviderOnBookingCreated = onDocumentCreated(
   }
 );
 
+exports.notifyCustomerOnRequestStatusChange = onDocumentUpdated(
+  {
+    document: 'service_requests/{requestId}',
+    region: 'us-central1',
+  },
+  async (event) => {
+    const beforeSnap = event.data?.before;
+    const afterSnap = event.data?.after;
+
+    if (!beforeSnap || !afterSnap) {
+      logger.warn('Missing before/after snapshot in status update trigger');
+      return;
+    }
+
+    const beforeData = beforeSnap.data() || {};
+    const afterData = afterSnap.data() || {};
+    const requestId = event.params.requestId;
+
+    const oldStatus = (beforeData.status || '').toString();
+    const newStatus = (afterData.status || '').toString();
+
+    if (!newStatus || oldStatus === newStatus) {
+      return;
+    }
+
+    const userId = afterData.userId || '';
+    const providerName = afterData.providerName || 'Provider';
+    const serviceType = afterData.serviceType || 'service';
+
+    if (!userId) {
+      logger.warn(`Request ${requestId} has no userId`);
+      return;
+    }
+
+    const content = getStatusNotificationContent(
+      newStatus,
+      providerName,
+      serviceType
+    );
+
+    if (!content) {
+      logger.info(`No notification mapped for status ${newStatus}`);
+      return;
+    }
+
+    try {
+      await sendToUserTokens(userId, {
+        title: content.title,
+        body: content.body,
+        data: {
+          type: 'request_status',
+          requestId,
+          status: newStatus,
+        },
+      });
+
+      logger.info(
+        `Customer notified for request ${requestId} status change: ${oldStatus} -> ${newStatus}`
+      );
+    } catch (error) {
+      logger.error(
+        `Failed to notify customer for request ${requestId} status ${newStatus}`,
+        error
+      );
+    }
+  }
+);
+
 exports.expirePendingBookings = onSchedule(
   {
     schedule: 'every 1 minutes',
@@ -126,8 +265,7 @@ exports.expirePendingBookings = onSchedule(
   },
   async () => {
     try {
-      const cutoffMillis =
-        Date.now() - REQUEST_TIMEOUT_MINUTES * 60 * 1000;
+      const cutoffMillis = Date.now() - REQUEST_TIMEOUT_MINUTES * 60 * 1000;
 
       const pendingSnap = await db
         .collection('service_requests')
@@ -183,10 +321,7 @@ exports.expirePendingBookings = onSchedule(
               return;
             }
 
-            if (
-              !freshCreatedAt ||
-              typeof freshCreatedAt.toMillis !== 'function'
-            ) {
+            if (!freshCreatedAt || typeof freshCreatedAt.toMillis !== 'function') {
               logger.info(`Skipping ${requestId}, createdAt still missing`);
               return;
             }

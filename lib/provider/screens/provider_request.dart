@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/chat_service.dart';
 import '../../services/request_service.dart';
 import '../../shared/screen/chat_page.dart';
+import '../../shared/widgets/notification_bell.dart';
 
 class ProviderRequest extends StatefulWidget {
   const ProviderRequest({super.key});
@@ -125,16 +126,23 @@ class _ProviderRequestState extends State<ProviderRequest> {
     }
   }
 
-  void _openChatPage({
+  Future<void> _openChatPage({
     required String requestId,
     required String customerId,
     required String providerId,
     required String customerName,
     required String customerPhone,
     required String status,
-  }) {
+  }) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
+
+    await _chatService.markMessagesAsRead(
+      requestId: requestId,
+      currentUserId: currentUser.uid,
+    );
+
+    if (!mounted) return;
 
     Navigator.push(
       context,
@@ -273,7 +281,12 @@ class _ProviderRequestState extends State<ProviderRequest> {
         final hasActiveAssignedRequest = currentRequestId.isNotEmpty;
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Incoming Requests')),
+          appBar: AppBar(
+            title: const Text('Incoming Requests'),
+            actions: const [
+              NotificationBell(),
+            ],
+          ),
           body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('service_requests')
@@ -567,22 +580,22 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                         onPressed: () => _confirmAndUpdate(
                                           doc.id,
                                           'in_progress',
-                                          'Start Service',
-                                          'Has the service started?',
+                                          'Start Work',
+                                          'Do you want to mark this job as in progress?',
                                         ),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.purple,
                                           foregroundColor: Colors.white,
                                         ),
-                                        child: const Text('Start Service'),
+                                        child: const Text('Start Work'),
                                       ),
                                     if (status == 'in_progress')
                                       ElevatedButton(
                                         onPressed: () => _confirmAndUpdate(
                                           doc.id,
                                           'completed',
-                                          'Complete Request',
-                                          'Mark this service as completed? You will become available again.',
+                                          'Complete Work',
+                                          'Have you completed this job?',
                                         ),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,

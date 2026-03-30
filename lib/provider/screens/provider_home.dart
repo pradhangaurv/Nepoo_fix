@@ -8,6 +8,7 @@ import '../../services/chat_service.dart';
 import '../../services/location_service.dart';
 import '../../services/route_service.dart';
 import '../../shared/screen/chat_page.dart';
+import '../../shared/widgets/notification_bell.dart';
 
 class ProviderHome extends StatefulWidget {
   const ProviderHome({super.key});
@@ -672,6 +673,9 @@ class _ProviderHomeState extends State<ProviderHome> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Provider Home"),
+        actions: const[
+          NotificationBell(),
+        ],
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
