@@ -1,11 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
 import '../../services/location_service.dart';
 import 'provider_details.dart';
 
 class FindServices extends StatefulWidget {
-  const FindServices({super.key});
+  final String? selectedType; // allows HomeScreen to pass service type
+
+  const FindServices({super.key, this.selectedType});
 
   @override
   State<FindServices> createState() => _FindServicesState();
@@ -14,8 +15,7 @@ class FindServices extends StatefulWidget {
 class _FindServicesState extends State<FindServices> {
   final LocationService _locationService = LocationService();
 
-  String selectedType = 'cleaner';
-
+  late String selectedType;
   bool loadingLocation = true;
   bool locationAvailable = false;
 
@@ -29,22 +29,20 @@ class _FindServicesState extends State<FindServices> {
   @override
   void initState() {
     super.initState();
+    selectedType = widget.selectedType?.toLowerCase() ?? 'cleaner';
     _loadCurrentLocation();
   }
 
   Future<void> _loadCurrentLocation() async {
     try {
       final current = await _locationService.getCurrentLatLng();
-
       if (!mounted) return;
-
       setState(() {
         loadingLocation = false;
         locationAvailable = current != null;
       });
     } catch (_) {
       if (!mounted) return;
-
       setState(() {
         loadingLocation = false;
         locationAvailable = false;
@@ -54,25 +52,15 @@ class _FindServicesState extends State<FindServices> {
 
   String _priceText(dynamic value) {
     if (value == null) return 'Price not set';
-
     if (value is int) return 'Rs $value/hour';
-    if (value is double) {
-      return value % 1 == 0
-          ? 'Rs ${value.toInt()}/hour'
-          : 'Rs ${value.toStringAsFixed(2)}/hour';
-    }
-
+    if (value is double) return value % 1 == 0
+        ? 'Rs ${value.toInt()}/hour'
+        : 'Rs ${value.toStringAsFixed(2)}/hour';
     final parsed = double.tryParse(value.toString());
     if (parsed == null) return 'Price not set';
-
     return parsed % 1 == 0
         ? 'Rs ${parsed.toInt()}/hour'
         : 'Rs ${parsed.toStringAsFixed(2)}/hour';
-  }
-
-  String _capitalize(String text) {
-    if (text.isEmpty) return text;
-    return text[0].toUpperCase() + text.substring(1);
   }
 
   void _openProviderDetails(String providerId) {
@@ -84,22 +72,23 @@ class _FindServicesState extends State<FindServices> {
     );
   }
 
+  String _capitalize(String text) =>
+      text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Find Services'),
-      ),
+      appBar: AppBar(title: const Text('Find Services')),
       body: Column(
         children: [
           if (loadingLocation)
             const Padding(
-              padding: EdgeInsets.only(top: 10),
+              padding: EdgeInsets.all(10),
               child: Text('Checking provider...'),
             ),
           if (!loadingLocation)
             Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.all(10),
               child: Text(
                 locationAvailable
                     ? 'Showing currently available providers'
@@ -110,7 +99,6 @@ class _FindServicesState extends State<FindServices> {
                 ),
               ),
             ),
-          const SizedBox(height: 12),
           SizedBox(
             height: 50,
             child: ListView.separated(
@@ -121,7 +109,6 @@ class _FindServicesState extends State<FindServices> {
               itemBuilder: (context, index) {
                 final item = categories[index];
                 final isSelected = selectedType == item['key'];
-
                 return ChoiceChip(
                   label: Text(item['label']!),
                   selected: isSelected,
@@ -143,34 +130,28 @@ class _FindServicesState extends State<FindServices> {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
                 if (snap.hasError) {
                   return Center(child: Text('Error: ${snap.error}'));
                 }
 
                 final docs = (snap.data?.docs ?? []).where((doc) {
                   final data = doc.data();
-
                   final approved = (data['approved'] ?? false) == true;
                   final blocked = (data['blocked'] ?? false) == true;
                   final setupComplete = (data['setupComplete'] ?? false) == true;
                   final isAvailable = (data['isAvailable'] ?? true) == true;
-                  final serviceType =
+                  final serviceTypeData =
                   (data['serviceType'] ?? '').toString().toLowerCase();
 
                   return approved &&
                       !blocked &&
                       setupComplete &&
                       isAvailable &&
-                      serviceType == selectedType;
+                      serviceTypeData == selectedType;
                 }).toList()
                   ..sort((a, b) {
-                    final aName = (a.data()['name'] ?? '')
-                        .toString()
-                        .toLowerCase();
-                    final bName = (b.data()['name'] ?? '')
-                        .toString()
-                        .toLowerCase();
+                    final aName = (a.data()['name'] ?? '').toString().toLowerCase();
+                    final bName = (b.data()['name'] ?? '').toString().toLowerCase();
                     return aName.compareTo(bName);
                   });
 
@@ -192,10 +173,6 @@ class _FindServicesState extends State<FindServices> {
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     final data = doc.data();
-
-                    final name = data['name']?.toString() ?? 'Unknown';
-                    final price = data['pricePerHour'];
-
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: InkWell(
@@ -210,7 +187,7 @@ class _FindServicesState extends State<FindServices> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      name,
+                                      data['name'] ?? 'Unknown',
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
@@ -219,9 +196,7 @@ class _FindServicesState extends State<FindServices> {
                                   ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
+                                        horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: Colors.green.withValues(alpha: 0.10),
                                       borderRadius: BorderRadius.circular(20),
@@ -246,7 +221,7 @@ class _FindServicesState extends State<FindServices> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _priceText(price),
+                                _priceText(data['pricePerHour']),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: Colors.green,
