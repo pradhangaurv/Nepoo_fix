@@ -14,11 +14,19 @@ class Setting extends StatefulWidget {
 }
 
 class _CustomerSettingsState extends State<Setting> {
+  static const Color primary = Color(0xff326178);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+  static const Color titleColor = Color(0xff284a79);
+
   Future<void> _logout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('Logout'),
           content: const Text('Are you sure you want to logout?'),
           actions: [
@@ -28,6 +36,13 @@ class _CustomerSettingsState extends State<Setting> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               child: const Text('Logout'),
             ),
           ],
@@ -50,7 +65,7 @@ class _CustomerSettingsState extends State<Setting> {
   void _openEditProfile() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EditProfilePage()),
+      MaterialPageRoute(builder: (_) => const EditProfilePage()),
     );
   }
 
@@ -64,7 +79,55 @@ class _CustomerSettingsState extends State<Setting> {
   void _openHelpSupport() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => HelpSupportPage()),
+      MaterialPageRoute(builder: (_) => const HelpSupportPage()),
+    );
+  }
+
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xff326178), Color(0xffdff1fc)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => Navigator.pop(context),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(
+                Icons.arrow_back_ios_new,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Settings',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -73,28 +136,34 @@ class _CustomerSettingsState extends State<Setting> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    Color? iconColor,
+    required Color iconColor,
     Color? textColor,
   }) {
-    final color = iconColor ?? Theme.of(context).primaryColor;
-
-    return Card(
-      elevation: 1.5,
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.12),
-          child: Icon(icon, color: color),
+          backgroundColor: iconColor.withValues(alpha: 0.12),
+          child: Icon(icon, color: iconColor),
         ),
         title: Text(
           title,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: textColor,
+            color: textColor ?? Colors.black87,
           ),
         ),
         subtitle: Text(subtitle),
@@ -107,60 +176,45 @@ class _CustomerSettingsState extends State<Setting> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Settings"),
-        centerTitle: true,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      backgroundColor: pageBg,
+      body: Column(
         children: [
-          const SizedBox(height: 8),
-
-          _buildSettingTile(
-            icon: Icons.person_outline,
-            title: "Edit Profile",
-            subtitle: "Update your personal information",
-            onTap: _openEditProfile,
-          ),
-
-          _buildSettingTile(
-            icon: Icons.notifications_none,
-            title: "Notifications",
-            subtitle: "View your app notifications",
-            onTap: _openNotifications,
-          ),
-
-          _buildSettingTile(
-            icon: Icons.help_outline,
-            title: "Help & Support",
-            subtitle: "Contact admin and get help",
-            onTap: _openHelpSupport,
-          ),
-
-          const SizedBox(height: 18),
-
-          Card(
-            elevation: 1.5,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: ListTile(
-              contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              leading: CircleAvatar(
-                backgroundColor: Colors.red.withValues(alpha: 0.12),
-                child: const Icon(Icons.logout, color: Colors.red),
-              ),
-              title: const Text(
-                "Logout",
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.red,
+          _buildTopHeader(context),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildSettingTile(
+                  icon: Icons.person_outline,
+                  title: "Edit Profile",
+                  subtitle: "Update your personal information",
+                  onTap: _openEditProfile,
+                  iconColor: primary,
                 ),
-              ),
-              subtitle: const Text("Sign out from your account"),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: _logout,
+                _buildSettingTile(
+                  icon: Icons.notifications_none,
+                  title: "Notifications",
+                  subtitle: "View your app notifications",
+                  onTap: _openNotifications,
+                  iconColor: const Color(0xff5b8def),
+                ),
+                _buildSettingTile(
+                  icon: Icons.help_outline,
+                  title: "Help & Support",
+                  subtitle: "Contact admin and get help",
+                  onTap: _openHelpSupport,
+                  iconColor: const Color(0xff7c5ac7),
+                ),
+                const SizedBox(height: 10),
+                _buildSettingTile(
+                  icon: Icons.logout,
+                  title: "Logout",
+                  subtitle: "Sign out from your account",
+                  onTap: _logout,
+                  iconColor: Colors.red,
+                  textColor: Colors.red,
+                ),
+              ],
             ),
           ),
         ],

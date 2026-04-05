@@ -18,6 +18,8 @@ class _MyLoginState extends State<MyLogin> {
   bool loading = false;
   bool checkingSession = true;
 
+  static const Color primary = Color(0xff326178);
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +89,35 @@ class _MyLoginState extends State<MyLogin> {
     super.dispose();
   }
 
+  InputDecoration _fieldDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        color: Colors.black54,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      filled: true,
+      fillColor: Colors.white70,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: primary, width: 1.4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (checkingSession) {
@@ -111,8 +142,14 @@ class _MyLoginState extends State<MyLogin> {
               child: Padding(
                 padding: EdgeInsets.only(top: 90),
                 child: Text(
-                  "Welcome Back\nLogin",
-                  style: TextStyle(color: Colors.black, fontSize: 33),
+                  "Welcome To\nNEPOOFIX",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    height: 1.2,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -129,13 +166,13 @@ class _MyLoginState extends State<MyLogin> {
                     Row(
                       children: [
                         const SizedBox(
-                          width: 90,
+                          width: 95,
                           child: Text(
                             'Email',
                             style: TextStyle(
                               color: Colors.black,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -143,29 +180,27 @@ class _MyLoginState extends State<MyLogin> {
                           child: TextField(
                             controller: emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              hintText: 'Enter Your Email',
-                              filled: true,
-                              fillColor: Colors.white70,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
                             ),
+                            decoration: _fieldDecoration('Enter your email'),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 24),
                     Row(
                       children: [
                         const SizedBox(
-                          width: 90,
+                          width: 95,
                           child: Text(
                             'Password',
                             style: TextStyle(
                               color: Colors.black,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -173,37 +208,59 @@ class _MyLoginState extends State<MyLogin> {
                           child: TextField(
                             controller: passwordController,
                             obscureText: true,
-                            decoration: InputDecoration(
-                              hintText: 'Enter Your Password',
-                              filled: true,
-                              fillColor: Colors.white70,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
                             ),
+                            decoration: _fieldDecoration('Enter your password'),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     SizedBox(
-                      width: 110,
+                      width: 170,
+                      height: 48,
                       child: ElevatedButton(
                         onPressed: loading ? null : login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
                         child: loading
                             ? const SizedBox(
                           height: 18,
                           width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                             : const Text('Log In'),
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 28),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text("Don't have an account? "),
+                        const Text(
+                          "Don't have an account? ",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         InkWell(
                           onTap: () {
                             Navigator.push(
@@ -215,7 +272,11 @@ class _MyLoginState extends State<MyLogin> {
                           },
                           child: const Text(
                             "Register Now!",
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: primary,
+                            ),
                           ),
                         )
                       ],

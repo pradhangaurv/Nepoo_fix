@@ -24,6 +24,8 @@ class _RegisterPageState extends State<RegisterPage> {
   String role = "user";
   bool loading = false;
 
+  static const Color primary = Color(0xff326178);
+
   Future<void> registration() async {
     final name = nameController.text.trim();
     final address = addressController.text.trim();
@@ -114,6 +116,54 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  InputDecoration _fieldDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        color: Colors.black54,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: 0.90),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: primary, width: 1.4),
+      ),
+    );
+  }
+
+  Widget _field(
+      TextEditingController c,
+      String hint, {
+        TextInputType keyboard = TextInputType.text,
+        bool obscure = false,
+      }) {
+    return TextField(
+      controller: c,
+      keyboardType: keyboard,
+      obscureText: obscure,
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+        color: Colors.black87,
+      ),
+      decoration: _fieldDecoration(hint),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -136,12 +186,22 @@ class _RegisterPageState extends State<RegisterPage> {
               children: [
                 const Text(
                   "Create an Account",
-                  style: TextStyle(color: Colors.black, fontSize: 33),
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
                 DropdownButtonFormField<String>(
                   value: role,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
                   items: const [
                     DropdownMenuItem(value: "user", child: Text("User")),
                     DropdownMenuItem(
@@ -152,41 +212,78 @@ class _RegisterPageState extends State<RegisterPage> {
                   onChanged: (v) => setState(() => role = v ?? "user"),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.9),
+                    fillColor: Colors.white.withValues(alpha: 0.90),
                     labelText: "Register As",
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: const BorderSide(color: primary, width: 1.4),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                _field(nameController, "Enter Your Name"),
+                _field(nameController, "Enter your name"),
                 const SizedBox(height: 12),
-                _field(addressController, "Enter Your Address"),
+                _field(addressController, "Enter your address"),
                 const SizedBox(height: 12),
                 _field(
                   numberController,
-                  "Enter Your Contact Number",
+                  "Enter your contact number",
                   keyboard: TextInputType.phone,
                 ),
                 const SizedBox(height: 12),
                 _field(
                   emailController,
-                  "Enter Your Email",
+                  "Enter your email",
                   keyboard: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 12),
-                _field(passwordController, "Enter Your Password", obscure: true),
-                const SizedBox(height: 18),
+                _field(
+                  passwordController,
+                  "Enter your password",
+                  obscure: true,
+                ),
+                const SizedBox(height: 20),
                 SizedBox(
-                  width: 180,
+                  width: 200,
+                  height: 48,
                   child: ElevatedButton(
                     onPressed: loading ? null : registration,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
                     child: loading
                         ? const SizedBox(
                       height: 18,
                       width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                         : const Text("Register Account"),
                   ),
@@ -195,7 +292,14 @@ class _RegisterPageState extends State<RegisterPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Already have an account? "),
+                    const Text(
+                      "Already have an account? ",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     InkWell(
                       onTap: () => Navigator.pushReplacement(
                         context,
@@ -203,7 +307,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       child: const Text(
                         "Log In Now!",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: primary,
+                        ),
                       ),
                     )
                   ],
@@ -212,25 +320,6 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _field(
-      TextEditingController c,
-      String hint, {
-        TextInputType keyboard = TextInputType.text,
-        bool obscure = false,
-      }) {
-    return TextField(
-      controller: c,
-      keyboardType: keyboard,
-      obscureText: obscure,
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.9),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
   }

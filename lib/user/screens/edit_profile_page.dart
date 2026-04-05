@@ -20,6 +20,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
   bool loading = true;
   bool saving = false;
 
+  static const Color primary = Color(0xff326178);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +108,54 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xff326178), Color(0xffdff1fc)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => Navigator.pop(context),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(
+                Icons.arrow_back_ios_new,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Edit Profile',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: Color(0xff284a79),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildField({
     required TextEditingController controller,
     required String label,
@@ -123,9 +175,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
         readOnly: readOnly,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(
+          prefixIcon: Icon(icon, color: primary),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+          enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: borderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: primary, width: 1.4),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Colors.red),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Colors.red, width: 1.4),
           ),
         ),
       ),
@@ -136,79 +207,114 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Widget build(BuildContext context) {
     if (loading) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Edit Profile'),
-          centerTitle: true,
-        ),
-        body: const Center(
-          child: CircularProgressIndicator(),
+        backgroundColor: pageBg,
+        body: Column(
+          children: [
+            _buildTopHeader(context),
+            const Expanded(
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          ],
         ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Profile'),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              _buildField(
-                controller: _nameController,
-                label: 'Full Name',
-                icon: Icons.person_outline,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter your name';
-                  }
-                  return null;
-                },
-              ),
-              _buildField(
-                controller: _emailController,
-                label: 'Email',
-                icon: Icons.email_outlined,
-                readOnly: true,
-              ),
-              _buildField(
-                controller: _phoneController,
-                label: 'Phone Number',
-                icon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter your phone number';
-                  }
-                  return null;
-                },
-              ),
-              _buildField(
-                controller: _addressController,
-                label: 'Address',
-                icon: Icons.location_on_outlined,
-                maxLines: 2,
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: saving ? null : _saveProfile,
-                  child: saving
-                      ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                      : const Text('Save Changes'),
+      backgroundColor: pageBg,
+      body: Column(
+        children: [
+          _buildTopHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      _buildField(
+                        controller: _nameController,
+                        label: 'Full Name',
+                        icon: Icons.person_outline,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      _buildField(
+                        controller: _emailController,
+                        label: 'Email',
+                        icon: Icons.email_outlined,
+                        readOnly: true,
+                      ),
+                      _buildField(
+                        controller: _phoneController,
+                        label: 'Phone Number',
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your phone number';
+                          }
+                          return null;
+                        },
+                      ),
+                      _buildField(
+                        controller: _addressController,
+                        label: 'Address',
+                        icon: Icons.location_on_outlined,
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: saving ? null : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: saving
+                              ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                              : const Text('Save Changes'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
