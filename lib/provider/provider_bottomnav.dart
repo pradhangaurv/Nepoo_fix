@@ -39,7 +39,7 @@ class _ProviderBottomNavState extends State<ProviderBottomNav> {
         items: const [
           Icon(Icons.home_outlined, color: Colors.white, size: 30),
           Icon(Icons.notifications_active_outlined, color: Colors.white, size: 30),
-          Icon(Icons.add_circle_outline, color: Colors.white, size: 30),
+          Icon(Icons.list_alt_outlined, color: Colors.white, size: 30),
           Icon(Icons.settings_outlined, color: Colors.white, size: 30),
         ],
       ),

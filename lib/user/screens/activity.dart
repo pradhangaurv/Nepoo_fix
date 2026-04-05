@@ -19,6 +19,13 @@ class _ActivityState extends State<Activity> {
 
   String selectedFilter = 'active';
 
+  static const Color primary = Color(0xff326178);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color chipSelectedBg = Color(0xffddd0f1);
+  static const Color chipSelectedText = Color(0xff4a3a73);
+  static const Color borderColor = Color(0xffe3dce8);
+  static const Color titleColor = Color(0xff284a79);
+
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
 
@@ -42,6 +49,8 @@ class _ActivityState extends State<Activity> {
         return Colors.red;
       case 'cancelled':
         return Colors.grey;
+      case 'pending':
+        return const Color(0xff7c5ac7);
       default:
         return Colors.deepPurple;
     }
@@ -85,6 +94,9 @@ class _ActivityState extends State<Activity> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('Cancel Request'),
           content: const Text('Are you sure you want to cancel this request?'),
           actions: [
@@ -97,6 +109,9 @@ class _ActivityState extends State<Activity> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: const Text('Yes, Cancel'),
             ),
@@ -138,18 +153,6 @@ class _ActivityState extends State<Activity> {
         SnackBar(content: Text('Failed to cancel request: $e')),
       );
     }
-  }
-
-  Widget _filterChip(String key, String label) {
-    final isSelected = selectedFilter == key;
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) {
-        setState(() => selectedFilter = key);
-      },
-    );
   }
 
   void _openReviewPage({
@@ -206,6 +209,52 @@ class _ActivityState extends State<Activity> {
     );
   }
 
+  Widget _buildFilterChip(String key, String label) {
+    final isSelected = selectedFilter == key;
+
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          setState(() => selectedFilter = key);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected ? chipSelectedBg : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? chipSelectedBg : borderColor,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isSelected) ...[
+                const Icon(
+                  Icons.check,
+                  size: 16,
+                  color: chipSelectedText,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected ? chipSelectedText : Colors.black87,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildChatButtonWithBadge({
     required String requestId,
     required String currentUserId,
@@ -235,8 +284,20 @@ class _ActivityState extends State<Activity> {
                 providerPhone: providerPhone,
                 status: status,
               ),
-              icon: const Icon(Icons.chat),
+              icon: const Icon(Icons.chat_bubble_outline),
               label: const Text('Chat'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
             ),
             if (unreadCount > 0)
               Positioned(
@@ -288,97 +349,168 @@ class _ActivityState extends State<Activity> {
     final createdAt = data['createdAt'];
     final updatedAt = data['updatedAt'];
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    providerName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  providerName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _statusColor(status).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _statusLabel(status),
-                    style: TextStyle(
-                      color: _statusColor(status),
-                      fontWeight: FontWeight.w600,
-                    ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _statusColor(status).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _statusLabel(status),
+                  style: TextStyle(
+                    color: _statusColor(status),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Service: $serviceType'),
-            const SizedBox(height: 4),
-            Text('Problem: $problem'),
-            const SizedBox(height: 4),
-            Text('Address: $address'),
-            const SizedBox(height: 4),
-            Text('Requested: ${_formatDate(createdAt)}'),
-            const SizedBox(height: 4),
-            Text('Last Update: ${_formatDate(updatedAt)}'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                if (_canCancel(status))
-                  ElevatedButton(
-                    onPressed: () => _cancelRequest(
-                      requestId: doc.id,
-                      status: status,
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Cancel Request'),
-                  ),
-                if (_canChat(status) &&
-                    providerId.isNotEmpty &&
-                    customerId.isNotEmpty &&
-                    currentUserId.isNotEmpty)
-                  _buildChatButtonWithBadge(
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text('Service: $serviceType'),
+          const SizedBox(height: 4),
+          Text('Problem: $problem'),
+          const SizedBox(height: 4),
+          Text('Address: $address'),
+          const SizedBox(height: 4),
+          Text('Requested: ${_formatDate(createdAt)}'),
+          const SizedBox(height: 4),
+          Text('Last Update: ${_formatDate(updatedAt)}'),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (_canCancel(status))
+                ElevatedButton(
+                  onPressed: () => _cancelRequest(
                     requestId: doc.id,
-                    currentUserId: currentUserId,
-                    customerId: customerId,
-                    providerId: providerId,
-                    providerName: providerName,
-                    providerPhone: providerPhone,
                     status: status,
                   ),
-                if (status == 'completed' && providerId.isNotEmpty)
-                  ElevatedButton(
-                    onPressed: () => _openReviewPage(
-                      requestId: doc.id,
-                      providerId: providerId,
-                      providerName: providerName,
-                      serviceType: serviceType,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
                     ),
-                    child: const Text('Rate & Review'),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-              ],
-            ),
+                  child: const Text('Cancel Request'),
+                ),
+              if (_canChat(status) &&
+                  providerId.isNotEmpty &&
+                  customerId.isNotEmpty &&
+                  currentUserId.isNotEmpty)
+                _buildChatButtonWithBadge(
+                  requestId: doc.id,
+                  currentUserId: currentUserId,
+                  customerId: customerId,
+                  providerId: providerId,
+                  providerName: providerName,
+                  providerPhone: providerPhone,
+                  status: status,
+                ),
+              if (status == 'completed' && providerId.isNotEmpty)
+                ElevatedButton(
+                  onPressed: () => _openReviewPage(
+                    requestId: doc.id,
+                    providerId: providerId,
+                    providerName: providerName,
+                    serviceType: serviceType,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xff7c5ac7),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Rate & Review'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 18,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xff326178),
+            Color(0xffdff1fc),
           ],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
         ),
+      ),
+      child: Row(
+        children: const [
+          Expanded(
+            child: Text(
+              'My Requests',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
+            ),
+          ),
+          NotificationBell(),
+        ],
       ),
     );
   }
@@ -394,93 +526,98 @@ class _ActivityState extends State<Activity> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Requests'),
-        actions: const [
-          NotificationBell(),
-        ],
-      ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('service_requests')
-            .where('userId', isEqualTo: user.uid)
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      backgroundColor: pageBg,
+      body: Column(
+        children: [
+          _buildTopHeader(context),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('service_requests')
+                  .where('userId', isEqualTo: user.uid)
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
+                }
 
-          final allDocs = [...(snap.data?.docs ?? [])]
-            ..sort((a, b) {
-              final aTime = a.data()['updatedAt'] ?? a.data()['createdAt'];
-              final bTime = b.data()['updatedAt'] ?? b.data()['createdAt'];
-              if (aTime is Timestamp && bTime is Timestamp) {
-                return bTime.compareTo(aTime);
-              }
-              return 0;
-            });
+                final allDocs = [...(snap.data?.docs ?? [])]
+                  ..sort((a, b) {
+                    final aTime = a.data()['updatedAt'] ?? a.data()['createdAt'];
+                    final bTime = b.data()['updatedAt'] ?? b.data()['createdAt'];
+                    if (aTime is Timestamp && bTime is Timestamp) {
+                      return bTime.compareTo(aTime);
+                    }
+                    return 0;
+                  });
 
-          final activeDocs = allDocs.where((doc) {
-            final status = (doc.data()['status'] ?? 'pending').toString();
-            return _isActiveStatus(status);
-          }).toList();
+                final activeDocs = allDocs.where((doc) {
+                  final status = (doc.data()['status'] ?? 'pending').toString();
+                  return _isActiveStatus(status);
+                }).toList();
 
-          final historyDocs = allDocs.where((doc) {
-            final status = (doc.data()['status'] ?? 'pending').toString();
-            return !_isActiveStatus(status);
-          }).toList();
+                final historyDocs = allDocs.where((doc) {
+                  final status = (doc.data()['status'] ?? 'pending').toString();
+                  return !_isActiveStatus(status);
+                }).toList();
 
-          final docsToShow =
-          selectedFilter == 'active' ? activeDocs : historyDocs;
+                final docsToShow =
+                selectedFilter == 'active' ? activeDocs : historyDocs;
 
-          return Column(
-            children: [
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
+                return Column(
                   children: [
-                    Expanded(
-                      child: _filterChip(
-                        'active',
-                        'Active (${activeDocs.length})',
+                    const SizedBox(height: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          _buildFilterChip(
+                            'active',
+                            'Active (${activeDocs.length})',
+                          ),
+                          const SizedBox(width: 12),
+                          _buildFilterChip(
+                            'history',
+                            'History (${historyDocs.length})',
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 12),
                     Expanded(
-                      child: _filterChip(
-                        'history',
-                        'History (${historyDocs.length})',
+                      child: docsToShow.isEmpty
+                          ? Center(
+                        child: Text(
+                          selectedFilter == 'active'
+                              ? 'No active requests'
+                              : 'No request history yet',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      )
+                          : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        itemCount: docsToShow.length,
+                        itemBuilder: (context, index) {
+                          return _buildRequestCard(docsToShow[index]);
+                        },
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: docsToShow.isEmpty
-                    ? Center(
-                  child: Text(
-                    selectedFilter == 'active'
-                        ? 'No active requests'
-                        : 'No request history yet',
-                  ),
-                )
-                    : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: docsToShow.length,
-                  itemBuilder: (context, index) {
-                    return _buildRequestCard(docsToShow[index]);
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -31,6 +31,11 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
   double? serviceLatitude;
   double? serviceLongitude;
 
+  static const Color primary = Color(0xff326178);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+  static const Color titleColor = Color(0xff284a79);
+
   @override
   void dispose() {
     _problemController.dispose();
@@ -93,13 +98,11 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     final lngValue = result['longitude'];
     final addressValue = result['locationAddress'];
 
-    final pickedLat = latValue is num
-        ? latValue.toDouble()
-        : double.tryParse('$latValue');
+    final pickedLat =
+    latValue is num ? latValue.toDouble() : double.tryParse('$latValue');
 
-    final pickedLng = lngValue is num
-        ? lngValue.toDouble()
-        : double.tryParse('$lngValue');
+    final pickedLng =
+    lngValue is num ? lngValue.toDouble() : double.tryParse('$lngValue');
 
     if (pickedLat == null || pickedLng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,14 +213,59 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     }
   }
 
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xff326178), Color(0xffdff1fc)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => Navigator.pop(context),
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Provider Details',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _infoCard(String title, String value) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.grey.shade100,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +277,7 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
               color: Colors.blueGrey,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           Text(value),
         ],
       ),
@@ -250,12 +298,31 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
     );
   }
 
+  InputDecoration _fieldDecoration({
+    required String label,
+    required String hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: primary, width: 1.4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Provider Details'),
-      ),
+      backgroundColor: pageBg,
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -333,211 +400,261 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                   return 0;
                 });
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
+              return Column(
+                children: [
+                  _buildTopHeader(context),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildStarRow(averageRating),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              reviewDocs.isEmpty
-                                  ? 'No ratings yet'
-                                  : '${averageRating.toStringAsFixed(1)} / 5  (${reviewDocs.length} reviews)',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isAvailable
-                            ? Colors.green.withValues(alpha: 0.10)
-                            : Colors.red.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isAvailable ? Icons.check_circle : Icons.cancel,
-                            color: isAvailable ? Colors.green : Colors.red,
-                          ),
-                          const SizedBox(width: 10),
                           Text(
-                            isAvailable
-                                ? 'Currently Available'
-                                : 'Currently Unavailable',
-                            style: TextStyle(
-                              color: isAvailable ? Colors.green : Colors.red,
+                            name,
+                            style: const TextStyle(
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    _infoCard('Service Type', _capitalize(serviceType)),
-                    _infoCard('Description', description),
-                    _infoCard('Price Per Hour', _priceText(price)),
-                    _infoCard('Phone', phone),
-                    _infoCard('Address', address),
-                    _infoCard('Available Days', _daysText(availableDays)),
-                    _infoCard('Working Hours', '$startHour - $endHour'),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Request This Service',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _problemController,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Problem Description',
-                        hintText: 'Describe the service you need',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _addressController,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Service Address',
-                        hintText: 'This will auto-fill from map',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.location_on),
-                        title: const Text('Selected Service Location'),
-                        subtitle: Text(
-                          'Lat: ${_coordinateText(serviceLatitude)}\nLng: ${_coordinateText(serviceLongitude)}',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _pickServiceLocationOnMap,
-                        icon: const Icon(Icons.map),
-                        label: Text(
-                          serviceLatitude != null && serviceLongitude != null
-                              ? 'Update Service Location on Map'
-                              : 'Pick Service Location on Map',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: bookingLoading || !isAvailable
-                            ? null
-                            : () => _submitBooking(data),
-                        child: bookingLoading
-                            ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                            : Text(
-                          isAvailable
-                              ? 'Confirm Booking'
-                              : 'Provider Unavailable',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Recent Reviews',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (reviewDocs.isEmpty)
-                      const Text('No reviews yet')
-                    else
-                      ...recentReviews.take(5).map((doc) {
-                        final review = doc.data();
-                        final userName =
-                            review['userName']?.toString() ?? 'User';
-                        final reviewText =
-                            review['reviewText']?.toString() ?? '';
-                        final ratingValue = review['rating'];
-                        final reviewRating = ratingValue is int
-                            ? ratingValue
-                            : int.tryParse(ratingValue.toString()) ?? 0;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
                               children: [
-                                Text(
-                                  userName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                                _buildStarRow(averageRating),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    reviewDocs.isEmpty
+                                        ? 'No ratings yet'
+                                        : '${averageRating.toStringAsFixed(1)} / 5  (${reviewDocs.length} reviews)',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: List.generate(5, (index) {
-                                    return Icon(
-                                      index < reviewRating
-                                          ? Icons.star
-                                          : Icons.star_border,
-                                      color: Colors.amber,
-                                      size: 20,
-                                    );
-                                  }),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  reviewText.isEmpty
-                                      ? 'No written review'
-                                      : reviewText,
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      }),
-                  ],
-                ),
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isAvailable
+                                  ? Colors.green.withValues(alpha: 0.10)
+                                  : Colors.red.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isAvailable
+                                      ? Icons.check_circle
+                                      : Icons.cancel,
+                                  color: isAvailable ? Colors.green : Colors.red,
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  isAvailable
+                                      ? 'Currently Available'
+                                      : 'Currently Unavailable',
+                                  style: TextStyle(
+                                    color:
+                                    isAvailable ? Colors.green : Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _infoCard('Service Type', _capitalize(serviceType)),
+                          _infoCard('Description', description),
+                          _infoCard('Price Per Hour', _priceText(price)),
+                          _infoCard('Phone', phone),
+                          _infoCard('Address', address),
+                          _infoCard('Available Days', _daysText(availableDays)),
+                          _infoCard('Working Hours', '$startHour - $endHour'),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Request This Service',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _problemController,
+                            maxLines: 4,
+                            decoration: _fieldDecoration(
+                              label: 'Problem Description',
+                              hint: 'Describe the service you need',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _addressController,
+                            maxLines: 2,
+                            readOnly: true,
+                            decoration: _fieldDecoration(
+                              label: 'Service Address',
+                              hint: 'This will auto-fill from map',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.location_on, color: primary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Selected Service Location\nLat: ${_coordinateText(serviceLatitude)}\nLng: ${_coordinateText(serviceLongitude)}',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: _pickServiceLocationOnMap,
+                              icon: const Icon(Icons.map),
+                              label: Text(
+                                serviceLatitude != null &&
+                                    serviceLongitude != null
+                                    ? 'Update Service Location on Map'
+                                    : 'Pick Service Location on Map',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primary,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: bookingLoading || !isAvailable
+                                  ? null
+                                  : () => _submitBooking(data),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isAvailable
+                                    ? const Color(0xff7c5ac7)
+                                    : Colors.grey,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: bookingLoading
+                                  ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : Text(
+                                isAvailable
+                                    ? 'Confirm Booking'
+                                    : 'Provider Unavailable',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Recent Reviews',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (reviewDocs.isEmpty)
+                            const Text('No reviews yet')
+                          else
+                            ...recentReviews.take(5).map((doc) {
+                              final review = doc.data();
+                              final userName =
+                                  review['userName']?.toString() ?? 'User';
+                              final reviewText =
+                                  review['reviewText']?.toString() ?? '';
+                              final ratingValue = review['rating'];
+                              final reviewRating = ratingValue is int
+                                  ? ratingValue
+                                  : int.tryParse(ratingValue.toString()) ?? 0;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: borderColor),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      userName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: List.generate(5, (index) {
+                                        return Icon(
+                                          index < reviewRating
+                                              ? Icons.star
+                                              : Icons.star_border,
+                                          color: Colors.amber,
+                                          size: 20,
+                                        );
+                                      }),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      reviewText.isEmpty
+                                          ? 'No written review'
+                                          : reviewText,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           );
