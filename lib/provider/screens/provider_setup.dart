@@ -21,7 +21,7 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
   final latitudeController = TextEditingController();
   final longitudeController = TextEditingController();
 
-  static const Color providerDark = Color(0xff244657);
+  static const Color providerDark = Color(0xff244687);
   static const Color providerLight = Color(0xff7fa7bd);
   static const Color pageBg = Color(0xfff4eff5);
   static const Color borderColor = Color(0xffe3dce8);
