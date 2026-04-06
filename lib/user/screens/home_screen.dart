@@ -294,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (parsed == null) return 'Price not set';
 
       return parsed % 1 == 0
-          ? 'NRP ${parsed.toInt()}/hour'
+          ? 'NPR ${parsed.toInt()}/hour'
           : 'NPR ${parsed.toStringAsFixed(2)}/hour';
     }
 
