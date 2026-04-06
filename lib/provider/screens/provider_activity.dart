@@ -12,6 +12,13 @@ class ProviderActivity extends StatefulWidget {
 class _ProviderActivityState extends State<ProviderActivity> {
   String selectedFilter = 'all';
 
+  static const Color providerDark = Color(0xff244657);
+  static const Color providerLight = Color(0xff7fa7bd);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+  static const Color chipSelectedBg = Color(0xffd6e2ea);
+  static const Color chipSelectedText = Color(0xff1f3d4d);
+
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
 
@@ -49,12 +56,57 @@ class _ProviderActivityState extends State<ProviderActivity> {
   Widget _filterChip(String key, String label) {
     final isSelected = selectedFilter == key;
 
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
         setState(() => selectedFilter = key);
       },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? chipSelectedBg : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? chipSelectedBg : borderColor,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? chipSelectedText : Colors.black87,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [providerDark, providerLight],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: const Text(
+        'Request History',
+        style: TextStyle(
+          fontSize: 25,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
     );
   }
 
@@ -69,149 +121,171 @@ class _ProviderActivityState extends State<ProviderActivity> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Request History')),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('service_requests')
-            .where('providerId', isEqualTo: user.uid)
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      backgroundColor: pageBg,
+      body: Column(
+        children: [
+          _buildTopHeader(context),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('service_requests')
+                  .where('providerId', isEqualTo: user.uid)
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
+                }
 
-          final historyDocs = (snap.data?.docs ?? []).where((doc) {
-            final status = (doc.data()['status'] ?? '').toString();
-            return status == 'completed' ||
-                status == 'cancelled' ||
-                status == 'rejected';
-          }).toList()
-            ..sort((a, b) {
-              final aTime = a.data()['updatedAt'];
-              final bTime = b.data()['updatedAt'];
-              if (aTime is Timestamp && bTime is Timestamp) {
-                return bTime.compareTo(aTime);
-              }
-              return 0;
-            });
+                final historyDocs = (snap.data?.docs ?? []).where((doc) {
+                  final status = (doc.data()['status'] ?? '').toString();
+                  return status == 'completed' ||
+                      status == 'cancelled' ||
+                      status == 'rejected';
+                }).toList()
+                  ..sort((a, b) {
+                    final aTime = a.data()['updatedAt'];
+                    final bTime = b.data()['updatedAt'];
+                    if (aTime is Timestamp && bTime is Timestamp) {
+                      return bTime.compareTo(aTime);
+                    }
+                    return 0;
+                  });
 
-          final filteredDocs = historyDocs.where((doc) {
-            final status = (doc.data()['status'] ?? '').toString();
-            if (selectedFilter == 'all') return true;
-            return status == selectedFilter;
-          }).toList();
+                final filteredDocs = historyDocs.where((doc) {
+                  final status = (doc.data()['status'] ?? '').toString();
+                  if (selectedFilter == 'all') return true;
+                  return status == selectedFilter;
+                }).toList();
 
-          final completedCount = historyDocs
-              .where((doc) => (doc.data()['status'] ?? '') == 'completed')
-              .length;
-          final cancelledCount = historyDocs
-              .where((doc) => (doc.data()['status'] ?? '') == 'cancelled')
-              .length;
-          final rejectedCount = historyDocs
-              .where((doc) => (doc.data()['status'] ?? '') == 'rejected')
-              .length;
+                final completedCount = historyDocs
+                    .where((doc) => (doc.data()['status'] ?? '') == 'completed')
+                    .length;
+                final cancelledCount = historyDocs
+                    .where((doc) => (doc.data()['status'] ?? '') == 'cancelled')
+                    .length;
+                final rejectedCount = historyDocs
+                    .where((doc) => (doc.data()['status'] ?? '') == 'rejected')
+                    .length;
 
-          return Column(
-            children: [
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                return Column(
                   children: [
-                    _filterChip('all', 'All (${historyDocs.length})'),
-                    _filterChip('completed', 'Completed ($completedCount)'),
-                    _filterChip('cancelled', 'Cancelled ($cancelledCount)'),
-                    _filterChip('rejected', 'Rejected ($rejectedCount)'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: filteredDocs.isEmpty
-                    ? const Center(
-                  child: Text('No request history yet'),
-                )
-                    : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: filteredDocs.length,
-                  itemBuilder: (context, index) {
-                    final data = filteredDocs[index].data();
-                    final status = (data['status'] ?? '').toString();
-                    final userName = data['userName']?.toString() ?? 'User';
-                    final userPhone = data['userPhone']?.toString() ?? '';
-                    final serviceType =
-                        data['serviceType']?.toString() ?? 'Service';
-                    final problem =
-                        data['problemDescription']?.toString() ?? '';
-                    final address =
-                        data['serviceAddress']?.toString() ?? '';
-                    final updatedAt = data['updatedAt'];
+                    const SizedBox(height: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _filterChip('all', 'All (${historyDocs.length})'),
+                          _filterChip('completed', 'Completed ($completedCount)'),
+                          _filterChip('cancelled', 'Cancelled ($cancelledCount)'),
+                          _filterChip('rejected', 'Rejected ($rejectedCount)'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: filteredDocs.isEmpty
+                          ? const Center(
+                        child: Text('No request history yet'),
+                      )
+                          : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        itemCount: filteredDocs.length,
+                        itemBuilder: (context, index) {
+                          final data = filteredDocs[index].data();
+                          final status = (data['status'] ?? '').toString();
+                          final userName =
+                              data['userName']?.toString() ?? 'User';
+                          final userPhone =
+                              data['userPhone']?.toString() ?? '';
+                          final serviceType =
+                              data['serviceType']?.toString() ?? 'Service';
+                          final problem =
+                              data['problemDescription']?.toString() ?? '';
+                          final address =
+                              data['serviceAddress']?.toString() ?? '';
+                          final updatedAt = data['updatedAt'];
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    userName,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _statusColor(status)
-                                        .withValues(alpha: 0.12),
-                                    borderRadius:
-                                    BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    _statusLabel(status),
-                                    style: TextStyle(
-                                      color: _statusColor(status),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderColor),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text('Service: $serviceType'),
-                            const SizedBox(height: 4),
-                            Text('Problem: $problem'),
-                            const SizedBox(height: 4),
-                            Text('Address: $address'),
-                            const SizedBox(height: 4),
-                            Text('Phone: $userPhone'),
-                            const SizedBox(height: 4),
-                            Text('Updated: ${_formatDate(updatedAt)}'),
-                          ],
-                        ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        userName,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _statusColor(status)
+                                            .withValues(alpha: 0.12),
+                                        borderRadius:
+                                        BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        _statusLabel(status),
+                                        style: TextStyle(
+                                          color: _statusColor(status),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text('Service: $serviceType'),
+                                const SizedBox(height: 4),
+                                Text('Problem: $problem'),
+                                const SizedBox(height: 4),
+                                Text('Address: $address'),
+                                const SizedBox(height: 4),
+                                Text('Phone: $userPhone'),
+                                const SizedBox(height: 4),
+                                Text('Updated: ${_formatDate(updatedAt)}'),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

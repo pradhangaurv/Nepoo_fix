@@ -18,6 +18,11 @@ class _ProviderRequestState extends State<ProviderRequest> {
   final RequestService _requestService = RequestService();
   final ChatService _chatService = ChatService();
 
+  static const Color providerDark = Color(0xff244657);
+  static const Color providerLight = Color(0xff7fa7bd);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
 
@@ -166,7 +171,8 @@ class _ProviderRequestState extends State<ProviderRequest> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         children: [
@@ -250,11 +256,51 @@ class _ProviderRequestState extends State<ProviderRequest> {
               ),
               icon: const Icon(Icons.chat),
               label: const Text('Chat'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: providerDark,
+                foregroundColor: Colors.white,
+              ),
             ),
             if (unread > 0) _buildUnreadBadge(unread),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [providerDark, providerLight],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Incoming Requests',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          NotificationBell(),
+        ],
+      ),
     );
   }
 
@@ -281,340 +327,376 @@ class _ProviderRequestState extends State<ProviderRequest> {
         final hasActiveAssignedRequest = currentRequestId.isNotEmpty;
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Incoming Requests'),
-            actions: const [
-              NotificationBell(),
-            ],
-          ),
-          body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('service_requests')
-                .where('providerId', isEqualTo: user.uid)
-                .snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+          backgroundColor: pageBg,
+          body: Column(
+            children: [
+              _buildTopHeader(context),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('service_requests')
+                      .where('providerId', isEqualTo: user.uid)
+                      .snapshots(),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-              if (snap.hasError) {
-                return Center(child: Text('Error: ${snap.error}'));
-              }
+                    if (snap.hasError) {
+                      return Center(child: Text('Error: ${snap.error}'));
+                    }
 
-              final allDocs = snap.data?.docs ?? [];
+                    final allDocs = snap.data?.docs ?? [];
 
-              final activeDocs = allDocs.where((doc) {
-                final status = (doc.data()['status'] ?? 'pending').toString();
-                return _isActiveStatus(status);
-              }).toList()
-                ..sort((a, b) {
-                  final aTime = a.data()['createdAt'];
-                  final bTime = b.data()['createdAt'];
-                  if (aTime is Timestamp && bTime is Timestamp) {
-                    return bTime.compareTo(aTime);
-                  }
-                  return 0;
-                });
+                    final activeDocs = allDocs.where((doc) {
+                      final status =
+                      (doc.data()['status'] ?? 'pending').toString();
+                      return _isActiveStatus(status);
+                    }).toList()
+                      ..sort((a, b) {
+                        final aTime = a.data()['createdAt'];
+                        final bTime = b.data()['createdAt'];
+                        if (aTime is Timestamp && bTime is Timestamp) {
+                          return bTime.compareTo(aTime);
+                        }
+                        return 0;
+                      });
 
-              final pendingCount = activeDocs
-                  .where((doc) => (doc.data()['status'] ?? '') == 'pending')
-                  .length;
+                    final pendingCount = activeDocs
+                        .where((doc) => (doc.data()['status'] ?? '') == 'pending')
+                        .length;
 
-              final acceptedCount = activeDocs
-                  .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
-                  .length;
+                    final acceptedCount = activeDocs
+                        .where((doc) => (doc.data()['status'] ?? '') == 'accepted')
+                        .length;
 
-              final travelCount = activeDocs.where((doc) {
-                final status = (doc.data()['status'] ?? '').toString();
-                return status == 'on_the_way' || status == 'arrived';
-              }).length;
+                    final travelCount = activeDocs.where((doc) {
+                      final status = (doc.data()['status'] ?? '').toString();
+                      return status == 'on_the_way' || status == 'arrived';
+                    }).length;
 
-              final workingCount = activeDocs
-                  .where((doc) => (doc.data()['status'] ?? '') == 'in_progress')
-                  .length;
+                    final workingCount = activeDocs
+                        .where(
+                            (doc) => (doc.data()['status'] ?? '') == 'in_progress')
+                        .length;
 
-              if (activeDocs.isEmpty) {
-                return const Center(
-                  child: Text('No active requests right now'),
-                );
-              }
+                    if (activeDocs.isEmpty) {
+                      return const Center(
+                        child: Text('No active requests right now'),
+                      );
+                    }
 
-              return Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: GridView.count(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 1.5,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
+                    return Column(
                       children: [
-                        _summaryCard(
-                          'Pending',
-                          pendingCount.toString(),
-                          Icons.hourglass_top,
-                          Colors.deepPurple,
-                        ),
-                        _summaryCard(
-                          'Accepted',
-                          acceptedCount.toString(),
-                          Icons.check_circle_outline,
-                          Colors.blue,
-                        ),
-                        _summaryCard(
-                          'Traveling',
-                          travelCount.toString(),
-                          Icons.directions_car,
-                          Colors.orange,
-                        ),
-                        _summaryCard(
-                          'Working',
-                          workingCount.toString(),
-                          Icons.build_circle_outlined,
-                          Colors.purple,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isAvailable
-                            ? Colors.green.withValues(alpha: 0.10)
-                            : Colors.red.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isAvailable ? Icons.check_circle : Icons.work,
-                            color: isAvailable ? Colors.green : Colors.red,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              isAvailable
-                                  ? 'You are currently available for new requests.'
-                                  : 'You are busy right now, complete it before accepting another one.',
-                              style: TextStyle(
-                                color: isAvailable ? Colors.green : Colors.red,
-                                fontWeight: FontWeight.w600,
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: GridView.count(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 1.5,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              _summaryCard(
+                                'Pending',
+                                pendingCount.toString(),
+                                Icons.hourglass_top,
+                                Colors.deepPurple,
                               ),
-                            ),
+                              _summaryCard(
+                                'Accepted',
+                                acceptedCount.toString(),
+                                Icons.check_circle_outline,
+                                Colors.blue,
+                              ),
+                              _summaryCard(
+                                'Traveling',
+                                travelCount.toString(),
+                                Icons.directions_car,
+                                Colors.orange,
+                              ),
+                              _summaryCard(
+                                'Working',
+                                workingCount.toString(),
+                                Icons.build_circle_outlined,
+                                Colors.purple,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: activeDocs.length,
-                      itemBuilder: (context, index) {
-                        final doc = activeDocs[index];
-                        final data = doc.data();
-                        final status = (data['status'] ?? 'pending').toString();
-                        final userName = data['userName']?.toString() ?? 'User';
-                        final userPhone = data['userPhone']?.toString() ?? '';
-                        final userId = data['userId']?.toString() ?? '';
-                        final providerId = data['providerId']?.toString() ?? '';
-                        final serviceType =
-                            data['serviceType']?.toString() ?? 'Service';
-                        final problem =
-                            data['problemDescription']?.toString() ?? '';
-                        final address =
-                            data['serviceAddress']?.toString() ?? '';
-                        final createdAt = data['createdAt'];
-
-                        final isCurrentAssignedRequest =
-                            currentRequestId == doc.id;
-                        final canAcceptThisRequest =
-                            !hasActiveAssignedRequest || isCurrentAssignedRequest;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: Padding(
+                        ),
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Container(
+                            width: double.infinity,
                             padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            decoration: BoxDecoration(
+                              color: isAvailable
+                                  ? Colors.green.withValues(alpha: 0.10)
+                                  : Colors.red.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        userName,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _statusColor(status)
-                                            .withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Text(
-                                        _statusLabel(status),
-                                        style: TextStyle(
-                                          color: _statusColor(status),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                Icon(
+                                  isAvailable
+                                      ? Icons.check_circle
+                                      : Icons.work,
+                                  color:
+                                  isAvailable ? Colors.green : Colors.red,
                                 ),
-                                const SizedBox(height: 10),
-                                _infoLine('Service: ', serviceType),
-                                _infoLine('Problem: ', problem),
-                                _infoLine(
-                                  'Address: ',
-                                  address.isEmpty ? 'Not provided' : address,
-                                ),
-                                _infoLine(
-                                  'Phone: ',
-                                  userPhone.isEmpty ? 'Not provided' : userPhone,
-                                ),
-                                _infoLine(
-                                  'Requested: ',
-                                  _formatDate(createdAt),
-                                ),
-                                if (status == 'pending' &&
-                                    hasActiveAssignedRequest &&
-                                    !isCurrentAssignedRequest) ...[
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Finish your current accepted job before accepting another request.',
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    isAvailable
+                                        ? 'You are currently available for new requests.'
+                                        : 'You are busy right now, complete it before accepting another one.',
                                     style: TextStyle(
-                                      color: Colors.red,
+                                      color:
+                                      isAvailable ? Colors.green : Colors.red,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                ],
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 10,
-                                  children: [
-                                    if (status == 'pending')
-                                      ElevatedButton(
-                                        onPressed: canAcceptThisRequest
-                                            ? () => _confirmAndUpdate(
-                                          doc.id,
-                                          'accepted',
-                                          'Accept Request',
-                                          'Do you want to accept this request? You will become unavailable to other users.',
-                                        )
-                                            : null,
-                                        child: const Text('Accept'),
-                                      ),
-                                    if (status == 'pending')
-                                      ElevatedButton(
-                                        onPressed: () => _confirmAndUpdate(
-                                          doc.id,
-                                          'rejected',
-                                          'Reject Request',
-                                          'Do you want to reject this request?',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: const Text('Reject'),
-                                      ),
-                                    if (_canChat(status) &&
-                                        userId.isNotEmpty &&
-                                        providerId.isNotEmpty)
-                                      _buildChatButton(
-                                        requestId: doc.id,
-                                        customerId: userId,
-                                        providerId: providerId,
-                                        customerName: userName,
-                                        customerPhone: userPhone,
-                                        status: status,
-                                        currentUserId: user.uid,
-                                      ),
-                                    if (status == 'accepted')
-                                      ElevatedButton(
-                                        onPressed: () => _confirmAndUpdate(
-                                          doc.id,
-                                          'on_the_way',
-                                          'Mark On The Way',
-                                          'Are you on the way to the customer?',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.orange,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: const Text('Mark On The Way'),
-                                      ),
-                                    if (status == 'on_the_way')
-                                      ElevatedButton(
-                                        onPressed: () => _confirmAndUpdate(
-                                          doc.id,
-                                          'arrived',
-                                          'Mark Arrived',
-                                          'Have you arrived at the customer location?',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.teal,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: const Text('Mark Arrived'),
-                                      ),
-                                    if (status == 'arrived')
-                                      ElevatedButton(
-                                        onPressed: () => _confirmAndUpdate(
-                                          doc.id,
-                                          'in_progress',
-                                          'Start Work',
-                                          'Do you want to mark this job as in progress?',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.purple,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: const Text('Start Work'),
-                                      ),
-                                    if (status == 'in_progress')
-                                      ElevatedButton(
-                                        onPressed: () => _confirmAndUpdate(
-                                          doc.id,
-                                          'completed',
-                                          'Complete Work',
-                                          'Have you completed this job?',
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: const Text('Complete'),
-                                      ),
-                                  ],
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            itemCount: activeDocs.length,
+                            itemBuilder: (context, index) {
+                              final doc = activeDocs[index];
+                              final data = doc.data();
+                              final status =
+                              (data['status'] ?? 'pending').toString();
+                              final userName =
+                                  data['userName']?.toString() ?? 'User';
+                              final userPhone =
+                                  data['userPhone']?.toString() ?? '';
+                              final userId =
+                                  data['userId']?.toString() ?? '';
+                              final providerId =
+                                  data['providerId']?.toString() ?? '';
+                              final serviceType =
+                                  data['serviceType']?.toString() ?? 'Service';
+                              final problem =
+                                  data['problemDescription']?.toString() ?? '';
+                              final address =
+                                  data['serviceAddress']?.toString() ?? '';
+                              final createdAt = data['createdAt'];
+
+                              final isCurrentAssignedRequest =
+                                  currentRequestId == doc.id;
+                              final canAcceptThisRequest =
+                                  !hasActiveAssignedRequest || isCurrentAssignedRequest;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: borderColor),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 8,
+                                      offset: Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            userName,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _statusColor(status)
+                                                .withValues(alpha: 0.12),
+                                            borderRadius:
+                                            BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            _statusLabel(status),
+                                            style: TextStyle(
+                                              color: _statusColor(status),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _infoLine('Service: ', serviceType),
+                                    _infoLine('Problem: ', problem),
+                                    _infoLine(
+                                      'Address: ',
+                                      address.isEmpty ? 'Not provided' : address,
+                                    ),
+                                    _infoLine(
+                                      'Phone: ',
+                                      userPhone.isEmpty
+                                          ? 'Not provided'
+                                          : userPhone,
+                                    ),
+                                    _infoLine(
+                                      'Requested: ',
+                                      _formatDate(createdAt),
+                                    ),
+                                    if (status == 'pending' &&
+                                        hasActiveAssignedRequest &&
+                                        !isCurrentAssignedRequest) ...[
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'Finish your current accepted job before accepting another request.',
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      children: [
+                                        if (status == 'pending')
+                                          ElevatedButton(
+                                            onPressed: canAcceptThisRequest
+                                                ? () => _confirmAndUpdate(
+                                              doc.id,
+                                              'accepted',
+                                              'Accept Request',
+                                              'Do you want to accept this request? You will become unavailable to other users.',
+                                            )
+                                                : null,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: providerDark,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child: const Text('Accept'),
+                                          ),
+                                        if (status == 'pending')
+                                          ElevatedButton(
+                                            onPressed: () => _confirmAndUpdate(
+                                              doc.id,
+                                              'rejected',
+                                              'Reject Request',
+                                              'Do you want to reject this request?',
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child: const Text('Reject'),
+                                          ),
+                                        if (_canChat(status) &&
+                                            userId.isNotEmpty &&
+                                            providerId.isNotEmpty)
+                                          _buildChatButton(
+                                            requestId: doc.id,
+                                            customerId: userId,
+                                            providerId: providerId,
+                                            customerName: userName,
+                                            customerPhone: userPhone,
+                                            status: status,
+                                            currentUserId: user.uid,
+                                          ),
+                                        if (status == 'accepted')
+                                          ElevatedButton(
+                                            onPressed: () => _confirmAndUpdate(
+                                              doc.id,
+                                              'on_the_way',
+                                              'Mark On The Way',
+                                              'Are you on the way to the customer?',
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.orange,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child:
+                                            const Text('Mark On The Way'),
+                                          ),
+                                        if (status == 'on_the_way')
+                                          ElevatedButton(
+                                            onPressed: () => _confirmAndUpdate(
+                                              doc.id,
+                                              'arrived',
+                                              'Mark Arrived',
+                                              'Have you arrived at the customer location?',
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.teal,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child:
+                                            const Text('Mark Arrived'),
+                                          ),
+                                        if (status == 'arrived')
+                                          ElevatedButton(
+                                            onPressed: () => _confirmAndUpdate(
+                                              doc.id,
+                                              'in_progress',
+                                              'Start Work',
+                                              'Do you want to mark this job as in progress?',
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.purple,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child: const Text('Start Work'),
+                                          ),
+                                        if (status == 'in_progress')
+                                          ElevatedButton(
+                                            onPressed: () => _confirmAndUpdate(
+                                              doc.id,
+                                              'completed',
+                                              'Complete Work',
+                                              'Have you completed this job?',
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.green,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            child: const Text('Complete'),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },

@@ -34,6 +34,11 @@ class _ProviderSettingsState extends State<ProviderSettings> {
   double? latitude;
   double? longitude;
 
+  static const Color providerDark = Color(0xff244657);
+  static const Color providerLight = Color(0xff7fa7bd);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+
   final List<String> allDays = const [
     'Sunday',
     'Monday',
@@ -328,7 +333,13 @@ class _ProviderSettingsState extends State<ProviderSettings> {
     required String value,
     required VoidCallback onTap,
   }) {
-    return Card(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
       child: ListTile(
         title: Text(title),
         subtitle: Text(value),
@@ -339,7 +350,13 @@ class _ProviderSettingsState extends State<ProviderSettings> {
   }
 
   Widget _summaryTile(String title, String value) {
-    return Card(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
       child: ListTile(
         title: Text(title),
         subtitle: Text(value),
@@ -347,141 +364,222 @@ class _ProviderSettingsState extends State<ProviderSettings> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Provider Settings"),
-        actions: [
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [providerDark, providerLight],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              "Provider Settings",
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
           IconButton(
-            icon: const Icon(Icons.edit),
+            icon: const Icon(Icons.edit, color: Colors.white),
             tooltip: "Edit",
             onPressed: _openEditOptions,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Scaffold(
+        backgroundColor: pageBg,
+        body: Column(
           children: [
-            const Text(
-              'Provider Summary',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            _summaryTile(
-              'Provider Name',
-              providerName.isEmpty ? 'Not set' : providerName,
-            ),
-            _summaryTile(
-              'Service',
-              serviceType.isEmpty ? 'Not set' : serviceType,
-            ),
-            _summaryTile(
-              'Rate',
-              _priceText(pricePerHour),
-            ),
-            const SizedBox(height: 8),
-            if (locationAddress.isNotEmpty)
-              Text(
-                'Work location is set.',
-                style: TextStyle(
-                  color: Colors.green.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-            else
-              Text(
-                'Work location is not set yet.',
-                style: TextStyle(
-                  color: Colors.orange.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            const SizedBox(height: 20),
-            SwitchListTile(
-              value: isAvailable,
-              title: const Text(
-                'Currently Available',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                isAvailable
-                    ? 'Users can request your service'
-                    : 'Users cannot book you right now',
-              ),
-              onChanged: (value) {
-                setState(() => isAvailable = value);
-              },
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Available Days',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: allDays.map(_dayChip).toList(),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Working Hours',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            _timeTile(
-              title: 'Start Time',
-              value: startHour,
-              onTap: () => _pickTime(isStart: true),
-            ),
-            _timeTile(
-              title: 'End Time',
-              value: endHour,
-              onTap: () => _pickTime(isStart: false),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: saving ? null : _saveAvailability,
-                child: saving
-                    ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                    : const Text('Save Settings'),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout),
-                label: const Text("Logout"),
-              ),
+            _buildTopHeader(context),
+            const Expanded(
+              child: Center(child: CircularProgressIndicator()),
             ),
           ],
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: pageBg,
+      body: Column(
+        children: [
+          _buildTopHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Provider Summary',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _summaryTile(
+                    'Provider Name',
+                    providerName.isEmpty ? 'Not set' : providerName,
+                  ),
+                  _summaryTile(
+                    'Service',
+                    serviceType.isEmpty ? 'Not set' : serviceType,
+                  ),
+                  _summaryTile(
+                    'Description',
+                    serviceDescription.isEmpty ? 'Not set' : serviceDescription,
+                  ),
+                  _summaryTile(
+                    'Rate',
+                    _priceText(pricePerHour),
+                  ),
+                  _summaryTile(
+                    'Work Location',
+                    locationAddress.isEmpty ? 'Not set' : locationAddress,
+                  ),
+                  const SizedBox(height: 8),
+                  if (locationAddress.isNotEmpty)
+                    Text(
+                      'Work location is set.',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    Text(
+                      'Work location is not set yet.',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: SwitchListTile(
+                      value: isAvailable,
+                      title: const Text(
+                        'Currently Available',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        isAvailable
+                            ? 'Users can request your service'
+                            : 'Users cannot book you right now',
+                      ),
+                      onChanged: (value) {
+                        setState(() => isAvailable = value);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Available Days',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: allDays.map(_dayChip).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Working Hours',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _timeTile(
+                    title: 'Start Time',
+                    value: startHour,
+                    onTap: () => _pickTime(isStart: true),
+                  ),
+                  _timeTile(
+                    title: 'End Time',
+                    value: endHour,
+                    onTap: () => _pickTime(isStart: false),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: saving ? null : _saveAvailability,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: providerDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: saving
+                          ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : const Text('Save Settings'),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout),
+                      label: const Text("Logout"),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

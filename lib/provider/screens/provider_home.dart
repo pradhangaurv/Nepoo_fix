@@ -22,6 +22,11 @@ class _ProviderHomeState extends State<ProviderHome> {
   final RouteService _routeService = RouteService();
   final ChatService _chatService = ChatService();
 
+  static const Color providerDark = Color(0xff244687);
+  static const Color providerLight = Color(0xff7fa7bd);
+  static const Color providerTitleColor = Colors.white;
+  static const Color pageBg = Color(0xfff4eff5);
+
   LatLng? _providerCurrentLatLng;
   bool _loadingLocation = true;
   String? _locationError;
@@ -660,6 +665,43 @@ class _ProviderHomeState extends State<ProviderHome> {
     );
   }
 
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [providerDark, providerLight],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Provider Home',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: providerTitleColor,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          NotificationBell(),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -671,142 +713,147 @@ class _ProviderHomeState extends State<ProviderHome> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Provider Home"),
-        actions: const[
-          NotificationBell(),
-        ],
-      ),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      backgroundColor: pageBg,
+      body: Column(
+        children: [
+          _buildTopHeader(context),
+          Expanded(
+            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (!snap.hasData || !snap.data!.exists || snap.data!.data() == null) {
-            return const Center(child: Text("Provider data not found"));
-          }
+                if (!snap.hasData ||
+                    !snap.data!.exists ||
+                    snap.data!.data() == null) {
+                  return const Center(child: Text("Provider data not found"));
+                }
 
-          final data = snap.data!.data()!;
-          final name = data["name"]?.toString() ?? "Provider";
-          final serviceType = data["serviceType"]?.toString() ?? "Not set";
-          final description =
-              data["serviceDescription"]?.toString() ?? "No description added";
-          final price = data["pricePerHour"];
-          final approved = (data["approved"] ?? false) == true;
-          final isAvailable = (data["isAvailable"] ?? true) == true;
-          final currentRequestId = data["currentRequestId"]?.toString() ?? '';
-          final availableDays = ((data["availableDays"] ?? []) as List)
-              .map((e) => e.toString())
-              .toList();
-          final startHour = data["startHour"]?.toString() ?? "Not set";
-          final endHour = data["endHour"]?.toString() ?? "Not set";
+                final data = snap.data!.data()!;
+                final name = data["name"]?.toString() ?? "Provider";
+                final serviceType = data["serviceType"]?.toString() ?? "Not set";
+                final description = data["serviceDescription"]?.toString() ??
+                    "No description added";
+                final price = data["pricePerHour"];
+                final approved = (data["approved"] ?? false) == true;
+                final isAvailable = (data["isAvailable"] ?? true) == true;
+                final currentRequestId =
+                    data["currentRequestId"]?.toString() ?? '';
+                final availableDays = ((data["availableDays"] ?? []) as List)
+                    .map((e) => e.toString())
+                    .toList();
+                final startHour = data["startHour"]?.toString() ?? "Not set";
+                final endHour = data["endHour"]?.toString() ?? "Not set";
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Hello, $name",
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Hello, $name",
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (currentRequestId.isNotEmpty)
+                        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: FirebaseFirestore.instance
+                              .collection('service_requests')
+                              .doc(currentRequestId)
+                              .snapshots(),
+                          builder: (context, requestSnap) {
+                            if (requestSnap.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Card(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            if (!requestSnap.hasData ||
+                                !requestSnap.data!.exists ||
+                                requestSnap.data!.data() == null) {
+                              return _buildNoActiveMapCard(isAvailable);
+                            }
+
+                            final requestData = requestSnap.data!.data()!;
+                            final status = (requestData['status'] ?? '').toString();
+                            final customerName =
+                                requestData['userName']?.toString() ?? 'Customer';
+                            final customerPhone =
+                                requestData['userPhone']?.toString() ?? '';
+                            final customerId =
+                                requestData['userId']?.toString() ?? '';
+                            final providerId =
+                                requestData['providerId']?.toString() ?? '';
+                            final serviceAddress =
+                                requestData['serviceAddress']?.toString() ?? '';
+                            final customerLat =
+                            _toDouble(requestData['serviceLatitude']);
+                            final customerLng =
+                            _toDouble(requestData['serviceLongitude']);
+
+                            if (_showMapForStatus(status)) {
+                              return _buildMapCard(
+                                requestId: requestSnap.data!.id,
+                                status: status,
+                                customerId: customerId,
+                                providerId: providerId,
+                                customerName: customerName,
+                                customerPhone: customerPhone,
+                                serviceAddress: serviceAddress,
+                                customerLat: customerLat,
+                                customerLng: customerLng,
+                              );
+                            }
+
+                            if (_hasActiveJobWithoutMap(status)) {
+                              return _buildArrivedCard(
+                                requestId: requestSnap.data!.id,
+                                status: status,
+                                customerId: customerId,
+                                providerId: providerId,
+                                customerName: customerName,
+                                customerPhone: customerPhone,
+                                serviceAddress: serviceAddress,
+                              );
+                            }
+
+                            return _buildNoActiveMapCard(isAvailable);
+                          },
+                        )
+                      else
+                        _buildNoActiveMapCard(isAvailable),
+                      const SizedBox(height: 16),
+                      _buildProfileCard(
+                        serviceType: serviceType,
+                        description: description,
+                        price: price,
+                        approved: approved,
+                        isAvailable: isAvailable,
+                        availableDays: availableDays,
+                        startHour: startHour,
+                        endHour: endHour,
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                if (currentRequestId.isNotEmpty)
-                  StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('service_requests')
-                        .doc(currentRequestId)
-                        .snapshots(),
-                    builder: (context, requestSnap) {
-                      if (requestSnap.connectionState ==
-                          ConnectionState.waiting) {
-                        return const Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          ),
-                        );
-                      }
-
-                      if (!requestSnap.hasData ||
-                          !requestSnap.data!.exists ||
-                          requestSnap.data!.data() == null) {
-                        return _buildNoActiveMapCard(isAvailable);
-                      }
-
-                      final requestData = requestSnap.data!.data()!;
-                      final status = (requestData['status'] ?? '').toString();
-                      final customerName =
-                          requestData['userName']?.toString() ?? 'Customer';
-                      final customerPhone =
-                          requestData['userPhone']?.toString() ?? '';
-                      final customerId =
-                          requestData['userId']?.toString() ?? '';
-                      final providerId =
-                          requestData['providerId']?.toString() ?? '';
-                      final serviceAddress =
-                          requestData['serviceAddress']?.toString() ?? '';
-                      final customerLat =
-                      _toDouble(requestData['serviceLatitude']);
-                      final customerLng =
-                      _toDouble(requestData['serviceLongitude']);
-
-                      if (_showMapForStatus(status)) {
-                        return _buildMapCard(
-                          requestId: requestSnap.data!.id,
-                          status: status,
-                          customerId: customerId,
-                          providerId: providerId,
-                          customerName: customerName,
-                          customerPhone: customerPhone,
-                          serviceAddress: serviceAddress,
-                          customerLat: customerLat,
-                          customerLng: customerLng,
-                        );
-                      }
-
-                      if (_hasActiveJobWithoutMap(status)) {
-                        return _buildArrivedCard(
-                          requestId: requestSnap.data!.id,
-                          status: status,
-                          customerId: customerId,
-                          providerId: providerId,
-                          customerName: customerName,
-                          customerPhone: customerPhone,
-                          serviceAddress: serviceAddress,
-                        );
-                      }
-
-                      return _buildNoActiveMapCard(isAvailable);
-                    },
-                  )
-                else
-                  _buildNoActiveMapCard(isAvailable),
-                const SizedBox(height: 16),
-                _buildProfileCard(
-                  serviceType: serviceType,
-                  description: description,
-                  price: price,
-                  approved: approved,
-                  isAvailable: isAvailable,
-                  availableDays: availableDays,
-                  startHour: startHour,
-                  endHour: endHour,
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

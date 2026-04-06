@@ -21,6 +21,11 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
   final latitudeController = TextEditingController();
   final longitudeController = TextEditingController();
 
+  static const Color providerDark = Color(0xff244657);
+  static const Color providerLight = Color(0xff7fa7bd);
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+
   final services = const [
     ("plumber", "Plumber"),
     ("electrician", "Electrician"),
@@ -104,7 +109,9 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
 
     if (locationAddress.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter your service location address")),
+        const SnackBar(
+          content: Text("Please enter your service location address"),
+        ),
       );
       return;
     }
@@ -173,6 +180,27 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
     super.dispose();
   }
 
+  InputDecoration _fieldDecoration({
+    required String label,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: providerDark, width: 1.4),
+      ),
+    );
+  }
+
   Widget _field({
     required TextEditingController controller,
     required String label,
@@ -184,10 +212,45 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
-      decoration: InputDecoration(
-        border: const OutlineInputBorder(),
-        labelText: label,
-        hintText: hint,
+      decoration: _fieldDecoration(label: label, hint: hint),
+    );
+  }
+
+  Widget _buildTopHeader(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        top: topInset + 16,
+        left: 18,
+        right: 18,
+        bottom: 18,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [providerDark, providerLight],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              "Provider Setup",
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: logout,
+            icon: const Icon(Icons.logout, color: Colors.white),
+          ),
+        ],
       ),
     );
   }
@@ -195,95 +258,130 @@ class _ProviderSetupScreenState extends State<ProviderSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Provider Setup"),
-        actions: [
-          IconButton(
-            onPressed: logout,
-            icon: const Icon(Icons.logout),
+      backgroundColor: pageBg,
+      body: Column(
+        children: [
+          _buildTopHeader(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Complete your provider profile",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: serviceType,
+                      items: services
+                          .map(
+                            (s) => DropdownMenuItem(
+                          value: s.$1,
+                          child: Text(s.$2),
+                        ),
+                      )
+                          .toList(),
+                      onChanged: (v) => setState(() => serviceType = v),
+                      decoration: _fieldDecoration(label: "Service Type"),
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: descriptionController,
+                      label: "Service Description",
+                      hint:
+                      "Example: Home cleaning, kitchen cleaning, bathroom cleaning",
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: priceController,
+                      label: "Price Per Hour",
+                      hint: "Example: 500",
+                      keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: locationAddressController,
+                      label: "Service Location Address",
+                      hint: "Example: Baneshwor, Kathmandu",
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: latitudeController,
+                      label: "Latitude (optional)",
+                      hint: "Example: 27.7172",
+                      keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 16),
+                    _field(
+                      controller: longitudeController,
+                      label: "Longitude (optional)",
+                      hint: "Example: 85.3240",
+                      keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "You can leave latitude and longitude empty for now.",
+                      style: TextStyle(
+                        color: Colors.blueGrey,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: saving ? null : save,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: providerDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: saving
+                            ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                            : const Text("Save and Continue"),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text(
-              "Complete your provider profile",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: serviceType,
-              items: services
-                  .map((s) => DropdownMenuItem(value: s.$1, child: Text(s.$2)))
-                  .toList(),
-              onChanged: (v) => setState(() => serviceType = v),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: "Service Type",
-              ),
-            ),
-            const SizedBox(height: 16),
-            _field(
-              controller: descriptionController,
-              label: "Service Description",
-              hint:
-              "Example: Home cleaning, kitchen cleaning, bathroom cleaning",
-              maxLines: 4,
-            ),
-            const SizedBox(height: 16),
-            _field(
-              controller: priceController,
-              label: "Price Per Hour",
-              hint: "Example: 500",
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 16),
-            _field(
-              controller: locationAddressController,
-              label: "Service Location Address",
-              hint: "Example: Baneshwor, Kathmandu",
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            _field(
-              controller: latitudeController,
-              label: "Latitude (optional for now)",
-              hint: "Example: 27.7172",
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 16),
-            _field(
-              controller: longitudeController,
-              label: "Longitude (optional for now)",
-              hint: "Example: 85.3240",
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "You can leave latitude and longitude empty for now. Later we can add Google Maps or current location.",
-                style: TextStyle(color: Colors.blueGrey),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: saving ? null : save,
-                child: saving
-                    ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                    : const Text("Save and Continue"),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
