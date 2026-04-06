@@ -282,20 +282,20 @@ class _HomeScreenState extends State<HomeScreen> {
     String priceText(dynamic value) {
       if (value == null) return 'Price not set';
 
-      if (value is int) return 'Rs $value/hour';
+      if (value is int) return 'NPR $value/hour';
 
       if (value is double) {
         return value % 1 == 0
-            ? 'Rs ${value.toInt()}/hour'
-            : 'Rs ${value.toStringAsFixed(2)}/hour';
+            ? 'NPR ${value.toInt()}/hour'
+            : 'NPR ${value.toStringAsFixed(2)}/hour';
       }
 
       final parsed = double.tryParse(value.toString());
       if (parsed == null) return 'Price not set';
 
       return parsed % 1 == 0
-          ? 'Rs ${parsed.toInt()}/hour'
-          : 'Rs ${parsed.toStringAsFixed(2)}/hour';
+          ? 'NRP ${parsed.toInt()}/hour'
+          : 'NPR ${parsed.toStringAsFixed(2)}/hour';
     }
 
     String capitalize(String text) {
