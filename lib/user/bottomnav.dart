@@ -5,7 +5,6 @@ import 'package:nepoo_fix/user/screens/find_services.dart';
 import 'package:nepoo_fix/user/screens/home_screen.dart';
 import 'package:nepoo_fix/user/screens/setting.dart';
 
-
 class BottomNav extends StatefulWidget {
   const BottomNav({super.key});
 

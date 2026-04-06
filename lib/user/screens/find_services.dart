@@ -5,8 +5,13 @@ import 'provider_details.dart';
 
 class FindServices extends StatefulWidget {
   final String? selectedType;
+  final bool showBackButton;
 
-  const FindServices({super.key, this.selectedType});
+  const FindServices({
+    super.key,
+    this.selectedType,
+    this.showBackButton = false,
+  });
 
   @override
   State<FindServices> createState() => _FindServicesState();
@@ -104,15 +109,21 @@ class _FindServicesState extends State<FindServices> {
       ),
       child: Row(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => Navigator.pop(context),
-            child: const Padding(
-              padding: EdgeInsets.all(6),
-              child: Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          if (widget.showBackButton) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => Navigator.pop(context),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
           const Expanded(
             child: Text(
               'Find Services',
@@ -193,8 +204,10 @@ class _FindServicesState extends State<FindServices> {
                     ),
                   ),
                   Container(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.green.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
@@ -335,8 +348,10 @@ class _FindServicesState extends State<FindServices> {
                       serviceTypeData == selectedType;
                 }).toList()
                   ..sort((a, b) {
-                    final aName = (a.data()['name'] ?? '').toString().toLowerCase();
-                    final bName = (b.data()['name'] ?? '').toString().toLowerCase();
+                    final aName =
+                    (a.data()['name'] ?? '').toString().toLowerCase();
+                    final bName =
+                    (b.data()['name'] ?? '').toString().toLowerCase();
                     return aName.compareTo(bName);
                   });
 
@@ -353,7 +368,8 @@ class _FindServicesState extends State<FindServices> {
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     return _providerCard(docs[index]);

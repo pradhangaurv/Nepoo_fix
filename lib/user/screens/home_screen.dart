@@ -40,7 +40,19 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => FindServices(selectedType: serviceType),
+        builder: (_) => FindServices(
+          selectedType: serviceType,
+          showBackButton: true,
+        ),
+      ),
+    );
+  }
+
+  void goToSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const Setting(showBackButton: true),
       ),
     );
   }
@@ -52,7 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // TOP HEADER
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(
@@ -71,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // USER + SETTINGS
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -86,14 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const Setting(),
-                            ),
-                          );
-                        },
+                        onTap: goToSettings,
                         child: Container(
                           height: 50,
                           width: 50,
@@ -155,9 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Align(
@@ -172,9 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
-
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('service_requests')
@@ -225,7 +224,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -345,8 +343,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 14),
-
-          // RIGHT SIDE BUTTON
           Align(
             alignment: Alignment.centerRight,
             child: SizedBox(

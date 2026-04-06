@@ -7,7 +7,12 @@ import 'edit_profile_page.dart';
 import 'help_support_page.dart';
 
 class Setting extends StatefulWidget {
-  const Setting({super.key});
+  final bool showBackButton;
+
+  const Setting({
+    super.key,
+    this.showBackButton = false,
+  });
 
   @override
   State<Setting> createState() => _CustomerSettingsState();
@@ -103,19 +108,21 @@ class _CustomerSettingsState extends State<Setting> {
       ),
       child: Row(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => Navigator.pop(context),
-            child: const Padding(
-              padding: EdgeInsets.all(6),
-              child: Icon(
-                Icons.arrow_back_ios_new,
-                color: Colors.white,
-                size: 20,
+          if (widget.showBackButton) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => Navigator.pop(context),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
           const Expanded(
             child: Text(
               'Settings',
