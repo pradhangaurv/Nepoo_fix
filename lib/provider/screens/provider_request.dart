@@ -77,6 +77,38 @@ class _ProviderRequestState extends State<ProviderRequest> {
     return _chatService.canChatForStatus(status);
   }
 
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  String _moneyText(double value) {
+    if (value % 1 == 0) return 'NPR ${value.toInt()}';
+    return 'NPR ${value.toStringAsFixed(2)}';
+  }
+
+  String _workedTimeText(int minutes) {
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+
+    if (hours == 0) return '$mins min';
+    if (mins == 0) return '$hours hr';
+    return '$hours hr $mins min';
+  }
+
+  double _calculateBilledHours(int workedMinutes) {
+    final rawHours = workedMinutes / 60.0;
+    return rawHours <= 1 ? 1.0 : rawHours;
+  }
+
+  String _formatClock(DateTime dt) {
+    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
+  }
+
   Future<void> _updateStatus(String requestId, String status) async {
     final provider = FirebaseAuth.instance.currentUser;
     if (provider == null) return;
@@ -98,6 +130,158 @@ class _ProviderRequestState extends State<ProviderRequest> {
         SnackBar(content: Text('Failed to update request: $e')),
       );
     }
+  }
+
+  Future<void> _completeRequestWithBilling({
+    required String requestId,
+    required int workedMinutes,
+    required double billedHours,
+    required double finalAmount,
+  }) async {
+    final provider = FirebaseAuth.instance.currentUser;
+    if (provider == null) return;
+
+    try {
+      await _requestService.completeProviderRequest(
+        providerId: provider.uid,
+        requestId: requestId,
+        workedMinutes: workedMinutes,
+        billedHours: billedHours,
+        finalAmount: finalAmount,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Job completed. Total: ${_moneyText(finalAmount)}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to complete request: $e')),
+      );
+    }
+  }
+
+  Future<void> _showCompleteDialog({
+    required String requestId,
+    required Map<String, dynamic> requestData,
+  }) async {
+    final startedAtValue = requestData['workStartedAt'];
+    if (startedAtValue is! Timestamp) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please tap Start Work first.'),
+        ),
+      );
+      return;
+    }
+
+    final rate = _toDouble(requestData['pricePerHour']) ?? 0;
+    if (rate <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Hourly rate was not found for this request.'),
+        ),
+      );
+      return;
+    }
+
+    final startedAt = startedAtValue.toDate();
+    final endedAt = DateTime.now();
+
+    int workedMinutes = endedAt.difference(startedAt).inMinutes;
+    if (workedMinutes < 1) workedMinutes = 1;
+
+    final billedHours = _calculateBilledHours(workedMinutes);
+    final finalAmount = billedHours * rate;
+    final firstHourMinimumApplied = workedMinutes < 60;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Complete Work'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Started: ${_formatClock(startedAt)}'),
+              const SizedBox(height: 6),
+              Text('Ended: ${_formatClock(endedAt)}'),
+              const SizedBox(height: 6),
+              Text('Worked Time: ${_workedTimeText(workedMinutes)}'),
+              const SizedBox(height: 6),
+              Text('Rate: ${_moneyText(rate)}/hour'),
+              const SizedBox(height: 12),
+              if (firstHourMinimumApplied)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'First-hour minimum charge applied.',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              if (firstHourMinimumApplied) const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Total: ${_moneyText(finalAmount)}',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm Completion'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    await _completeRequestWithBilling(
+      requestId: requestId,
+      workedMinutes: workedMinutes,
+      billedHours: billedHours,
+      finalAmount: finalAmount,
+    );
   }
 
   Future<void> _confirmAndUpdate(
@@ -493,6 +677,8 @@ class _ProviderRequestState extends State<ProviderRequest> {
                               final address =
                                   data['serviceAddress']?.toString() ?? '';
                               final createdAt = data['createdAt'];
+                              final pricePerHour = _toDouble(data['pricePerHour']);
+                              final workStartedAt = data['workStartedAt'];
 
                               final isCurrentAssignedRequest =
                                   currentRequestId == doc.id;
@@ -566,6 +752,17 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                       'Requested: ',
                                       _formatDate(createdAt),
                                     ),
+                                    if (pricePerHour != null)
+                                      _infoLine(
+                                        'Rate: ',
+                                        '${_moneyText(pricePerHour)}/hour',
+                                      ),
+                                    if (status == 'in_progress' &&
+                                        workStartedAt is Timestamp)
+                                      _infoLine(
+                                        'Started: ',
+                                        _formatDate(workStartedAt),
+                                      ),
                                     if (status == 'pending' &&
                                         hasActiveAssignedRequest &&
                                         !isCurrentAssignedRequest) ...[
@@ -671,11 +868,9 @@ class _ProviderRequestState extends State<ProviderRequest> {
                                           ),
                                         if (status == 'in_progress')
                                           ElevatedButton(
-                                            onPressed: () => _confirmAndUpdate(
-                                              doc.id,
-                                              'completed',
-                                              'Complete Work',
-                                              'Have you completed this job?',
+                                            onPressed: () => _showCompleteDialog(
+                                              requestId: doc.id,
+                                              requestData: data,
                                             ),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: Colors.green,

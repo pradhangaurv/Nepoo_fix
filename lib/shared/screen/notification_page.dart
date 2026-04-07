@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
 
+  static const Color pageBg = Color(0xfff4eff5);
+  static const Color borderColor = Color(0xffe3dce8);
+  static const Color primary = Color(0xff326178);
+
   String _formatDate(dynamic value) {
     if (value is! Timestamp) return 'Just now';
     final dt = value.toDate();
@@ -50,14 +54,34 @@ class NotificationPage extends StatelessWidget {
     }
 
     return Scaffold(
+      backgroundColor: pageBg,
       appBar: AppBar(
-        title: const Text('Notifications'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => _markAllAsRead(user.uid),
-            child: const Text('Mark all read'),
+            child: const Text(
+              'Mark all read',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: primary,
+              ),
+            ),
           ),
         ],
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
@@ -79,14 +103,20 @@ class NotificationPage extends StatelessWidget {
 
           if (docs.isEmpty) {
             return const Center(
-              child: Text('No notifications yet'),
+              child: Text(
+                'No notifications yet',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             );
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data();
@@ -96,31 +126,43 @@ class NotificationPage extends StatelessWidget {
               final createdAt = data['createdAt'];
 
               return InkWell(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 onTap: () => _markAsRead(user.uid, doc.id),
                 child: Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: isRead
-                        ? Colors.grey.withOpacity(0.08)
-                        : Colors.blue.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
+                        ? Colors.grey.withValues(alpha: 0.08)
+                        : Colors.blue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isRead ? Colors.grey.shade300 : Colors.blue.shade200,
                     ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       CircleAvatar(
-                        backgroundColor:
-                        isRead ? Colors.grey.shade300 : Colors.blue.shade100,
+                        radius: 24,
+                        backgroundColor: isRead
+                            ? Colors.grey.shade300
+                            : Colors.blue.shade100,
                         child: Icon(
-                          isRead ? Icons.notifications_none : Icons.notifications,
+                          isRead
+                              ? Icons.notifications_none
+                              : Icons.notifications,
+                          size: 24,
                           color: isRead ? Colors.grey.shade700 : Colors.blue,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,19 +171,28 @@ class NotificationPage extends StatelessWidget {
                               title,
                               style: TextStyle(
                                 fontWeight:
-                                isRead ? FontWeight.w500 : FontWeight.bold,
-                                fontSize: 16,
+                                isRead ? FontWeight.w600 : FontWeight.w700,
+                                fontSize: 17,
+                                color: Colors.black87,
                               ),
                             ),
                             if (body.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(body),
+                              const SizedBox(height: 6),
+                              Text(
+                                body,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  height: 1.4,
+                                  color: Colors.black87,
+                                ),
+                              ),
                             ],
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
                             Text(
                               _formatDate(createdAt),
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
                                 color: Colors.grey.shade700,
                               ),
                             ),

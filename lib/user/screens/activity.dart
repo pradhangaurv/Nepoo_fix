@@ -33,6 +33,31 @@ class _ActivityState extends State<Activity> {
     return '${dt.day}/${dt.month}/${dt.year}  ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  String _moneyText(dynamic value) {
+    final parsed = _toDouble(value);
+    if (parsed == null) return 'Not set';
+    if (parsed % 1 == 0) return 'NPR ${parsed.toInt()}';
+    return 'NPR ${parsed.toStringAsFixed(2)}';
+  }
+
+  String _workedTimeText(dynamic value) {
+    final minutes = value is int ? value : int.tryParse(value?.toString() ?? '');
+    if (minutes == null) return 'Not set';
+
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+
+    if (hours == 0) return '$mins min';
+    if (mins == 0) return '$hours hr';
+    return '$hours hr $mins min';
+  }
+
   Color _statusColor(String status) {
     switch (status) {
       case 'accepted':
@@ -348,6 +373,8 @@ class _ActivityState extends State<Activity> {
     final address = data['serviceAddress']?.toString() ?? '';
     final createdAt = data['createdAt'];
     final updatedAt = data['updatedAt'];
+    final workedMinutes = data['workedMinutes'];
+    final finalAmount = data['finalAmount'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -409,6 +436,18 @@ class _ActivityState extends State<Activity> {
           Text('Requested: ${_formatDate(createdAt)}'),
           const SizedBox(height: 4),
           Text('Last Update: ${_formatDate(updatedAt)}'),
+          if (status == 'completed') ...[
+            const SizedBox(height: 4),
+            Text('Worked Time: ${_workedTimeText(workedMinutes)}'),
+            const SizedBox(height: 4),
+            Text(
+              'Total: ${_moneyText(finalAmount)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Wrap(
             spacing: 10,

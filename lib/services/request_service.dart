@@ -135,10 +135,16 @@ class RequestService {
       final currentRequestId = providerData['currentRequestId']?.toString();
       final customerId = requestData['userId']?.toString() ?? '';
 
-      transaction.update(requestRef, {
+      final requestUpdate = <String, dynamic>{
         'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (status == 'in_progress') {
+        requestUpdate['workStartedAt'] = FieldValue.serverTimestamp();
+      }
+
+      transaction.update(requestRef, requestUpdate);
 
       if (status == 'accepted') {
         if (currentRequestId != null &&
@@ -186,6 +192,47 @@ class RequestService {
             'updatedAt': FieldValue.serverTimestamp(),
           });
         }
+      }
+    });
+  }
+
+  Future<void> completeProviderRequest({
+    required String providerId,
+    required String requestId,
+    required int workedMinutes,
+    required double billedHours,
+    required double finalAmount,
+  }) async {
+    final requestRef = _db.collection('service_requests').doc(requestId);
+    final providerRef = _db.collection('users').doc(providerId);
+
+    await _db.runTransaction((transaction) async {
+      final providerSnap = await transaction.get(providerRef);
+      final requestSnap = await transaction.get(requestRef);
+
+      if (!requestSnap.exists) {
+        throw Exception('Request not found');
+      }
+
+      final providerData = providerSnap.data() ?? <String, dynamic>{};
+      final currentRequestId =
+      (providerData['currentRequestId'] ?? '').toString();
+
+      transaction.update(requestRef, {
+        'status': 'completed',
+        'workedMinutes': workedMinutes,
+        'billedHours': billedHours,
+        'finalAmount': finalAmount,
+        'completedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (currentRequestId == requestId || currentRequestId.isEmpty) {
+        transaction.update(providerRef, {
+          'isAvailable': true,
+          'currentRequestId': null,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
     });
   }
