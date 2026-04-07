@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../auth/login_screen.dart';
+import 'admin_provider_history.dart';
 
 class AdminDash extends StatelessWidget {
   const AdminDash({super.key});
@@ -42,7 +43,8 @@ class AdminDash extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),          borderRadius: BorderRadius.circular(12),
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
@@ -73,7 +75,7 @@ class AdminDash extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _logout(context),
-          )
+          ),
         ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -209,6 +211,25 @@ class AdminDash extends StatelessWidget {
                                     child: Text(
                                       blocked ? "Unblock" : "Block",
                                     ),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              AdminProviderHistoryPage(
+                                                providerId: uid,
+                                                providerName: name,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blueGrey,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text("View History"),
                                   ),
                                 ],
                               ),
