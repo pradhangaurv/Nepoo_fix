@@ -14,7 +14,7 @@ class _ProviderActivityState extends State<ProviderActivity> {
 
   static const Color providerDark = Color(0xff244687);
   static const Color providerLight = Color(0xff7fa7bd);
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
   static const Color borderColor = Color(0xffe3dce8);
   static const Color chipSelectedBg = Color(0xffd6e2ea);
   static const Color chipSelectedText = Color(0xff1f3d4d);

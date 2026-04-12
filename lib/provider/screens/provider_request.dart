@@ -20,7 +20,7 @@ class _ProviderRequestState extends State<ProviderRequest> {
 
   static const Color providerDark = Color(0xff244687);
   static const Color providerLight = Color(0xff7fa7bd);
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
   static const Color borderColor = Color(0xffe3dce8);
 
   String _formatDate(dynamic value) {

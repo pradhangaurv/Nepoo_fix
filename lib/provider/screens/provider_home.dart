@@ -25,7 +25,7 @@ class _ProviderHomeState extends State<ProviderHome> {
   static const Color providerDark = Color(0xff244687);
   static const Color providerLight = Color(0xff7fa7bd);
   static const Color providerTitleColor = Colors.white;
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
 
   LatLng? _providerCurrentLatLng;
   bool _loadingLocation = true;
