@@ -21,7 +21,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   bool saving = false;
 
   static const Color primary = Color(0xff326178);
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
   static const Color borderColor = Color(0xffe3dce8);
 
   @override

@@ -5,7 +5,7 @@ class HelpSupportPage extends StatelessWidget {
   const HelpSupportPage({super.key});
 
   static const Color primary = Color(0xff326178);
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
   static const Color borderColor = Color(0xffe3dce8);
 
   static const String adminName = 'Admin Support';

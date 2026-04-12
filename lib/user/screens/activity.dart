@@ -20,9 +20,9 @@ class _ActivityState extends State<Activity> {
   String selectedFilter = 'active';
 
   static const Color primary = Color(0xff326178);
-  static const Color pageBg = Color(0xfff4eff5);
-  static const Color chipSelectedBg = Color(0xffddd0f1);
-  static const Color chipSelectedText = Color(0xff4a3a73);
+  static const Color pageBg = Color(0xffffffff);
+  static const Color chipSelectedBg = Color(0xffb6d1e3);
+  static const Color chipSelectedText = Color(0xffc1effb);
   static const Color borderColor = Color(0xffe3dce8);
   static const Color titleColor = Color(0xff284a79);
 

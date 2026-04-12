@@ -34,10 +34,10 @@ class _FindServicesState extends State<FindServices> {
   String _radiusFilter = 'all'; // all | 5 | 10 | 20
 
   static const Color primary = Color(0xff326178);
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
   static const Color titleColor = Color(0xff284a79);
   static const Color borderColor = Color(0xffe3dce8);
-  static const Color chipSelectedBg = Color(0xffddd0f1);
+  static const Color chipSelectedBg = Color(0xffb6d1e3);
   static const Color chipSelectedText = Color(0xff4a3a73);
 
   final List<Map<String, String>> categories = const [
@@ -357,6 +357,7 @@ class _FindServicesState extends State<FindServices> {
                 if (value == null) return;
                 setState(() => _sortBy = value);
               },
+              dropdownColor: Color(0xffd9ebf8),
             ),
           ),
           const SizedBox(width: 10),
@@ -388,6 +389,7 @@ class _FindServicesState extends State<FindServices> {
                 if (value == null) return;
                 setState(() => _radiusFilter = value);
               },
+              dropdownColor: Color(0xffd9ebf8),
             ),
           ),
         ],

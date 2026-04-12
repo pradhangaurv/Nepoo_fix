@@ -20,7 +20,7 @@ class Setting extends StatefulWidget {
 
 class _CustomerSettingsState extends State<Setting> {
   static const Color primary = Color(0xff326178);
-  static const Color pageBg = Color(0xfff4eff5);
+  static const Color pageBg = Color(0xffffffff);
   static const Color borderColor = Color(0xffe3dce8);
   static const Color titleColor = Color(0xff284a79);
 
