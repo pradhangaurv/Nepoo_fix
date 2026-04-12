@@ -42,6 +42,30 @@ class _ProviderHomeState extends State<ProviderHome> {
     _loadProviderCurrentLocation();
   }
 
+  Future<void> _saveProviderCurrentLocationToFirestore(LatLng point) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    String address = '';
+
+    try {
+      address = await _locationService.reverseGeocode(point);
+    } catch (_) {
+      address = '';
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'currentLatitude': point.latitude,
+        'currentLongitude': point.longitude,
+        'currentLocationAddress': address,
+        'locationUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Keep silent so home page still works even if Firestore update fails.
+    }
+  }
+
   Future<void> _loadProviderCurrentLocation() async {
     try {
       final current = await _locationService.getCurrentLatLng();
@@ -55,6 +79,10 @@ class _ProviderHomeState extends State<ProviderHome> {
         });
         return;
       }
+
+      await _saveProviderCurrentLocationToFirestore(current);
+
+      if (!mounted) return;
 
       setState(() {
         _providerCurrentLatLng = current;

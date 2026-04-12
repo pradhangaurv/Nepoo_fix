@@ -350,12 +350,22 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
               data['serviceDescription']?.toString() ?? 'No description';
           final phone = data['phone']?.toString() ?? 'No phone';
 
+          final currentLocationAddress =
+              data['currentLocationAddress']?.toString().trim() ?? '';
           final locationAddress =
               data['locationAddress']?.toString().trim() ?? '';
-          final profileAddress = data['address']?.toString().trim() ?? '';
-          final address = locationAddress.isNotEmpty
+          final profileAddress =
+              data['address']?.toString().trim() ?? '';
+
+          final address = currentLocationAddress.isNotEmpty
+              ? currentLocationAddress
+              : (locationAddress.isNotEmpty
               ? locationAddress
-              : (profileAddress.isNotEmpty ? profileAddress : 'No address');
+              : (profileAddress.isNotEmpty ? profileAddress : 'No address'));
+
+          final locationType = currentLocationAddress.isNotEmpty
+              ? 'Last known device location'
+              : 'Work location';
 
           final price = data['pricePerHour'];
 
@@ -480,6 +490,7 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                           _infoCard('Price Per Hour', _priceText(price)),
                           _infoCard('Phone', phone),
                           _infoCard('Address', address),
+                          _infoCard('Location Type', locationType),
                           _infoCard('Available Days', _daysText(availableDays)),
                           _infoCard('Working Hours', '$startHour - $endHour'),
                           const SizedBox(height: 18),
@@ -613,7 +624,7 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 10),
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(14),
@@ -636,16 +647,14 @@ class _ProviderDetailsPageState extends State<ProviderDetailsPage> {
                                               ? Icons.star
                                               : Icons.star_border,
                                           color: Colors.amber,
-                                          size: 20,
+                                          size: 18,
                                         );
                                       }),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      reviewText.isEmpty
-                                          ? 'No written review'
-                                          : reviewText,
-                                    ),
+                                    if (reviewText.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(reviewText),
+                                    ],
                                   ],
                                 ),
                               );

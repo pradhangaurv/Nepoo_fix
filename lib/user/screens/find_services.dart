@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
+
 import '../../services/location_service.dart';
 import 'provider_details.dart';
 
@@ -19,10 +21,17 @@ class FindServices extends StatefulWidget {
 
 class _FindServicesState extends State<FindServices> {
   final LocationService _locationService = LocationService();
+  final TextEditingController _searchController = TextEditingController();
 
   late String selectedType;
+
   bool loadingLocation = true;
   bool locationAvailable = false;
+  LatLng? _userLatLng;
+
+  String _searchText = '';
+  String _sortBy = 'nearest'; // nearest | name
+  String _radiusFilter = 'all'; // all | 5 | 10 | 20
 
   static const Color primary = Color(0xff326178);
   static const Color pageBg = Color(0xfff4eff5);
@@ -45,17 +54,27 @@ class _FindServicesState extends State<FindServices> {
     _loadCurrentLocation();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadCurrentLocation() async {
     try {
       final current = await _locationService.getCurrentLatLng();
       if (!mounted) return;
+
       setState(() {
+        _userLatLng = current;
         loadingLocation = false;
         locationAvailable = current != null;
       });
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
+        _userLatLng = null;
         loadingLocation = false;
         locationAvailable = false;
       });
@@ -64,14 +83,17 @@ class _FindServicesState extends State<FindServices> {
 
   String _priceText(dynamic value) {
     if (value == null) return 'Price not set';
+
     if (value is int) return 'NPR $value/hour';
     if (value is double) {
       return value % 1 == 0
           ? 'NPR ${value.toInt()}/hour'
           : 'NPR ${value.toStringAsFixed(2)}/hour';
     }
+
     final parsed = double.tryParse(value.toString());
     if (parsed == null) return 'Price not set';
+
     return parsed % 1 == 0
         ? 'NPR ${parsed.toInt()}/hour'
         : 'NPR ${parsed.toStringAsFixed(2)}/hour';
@@ -88,6 +110,101 @@ class _FindServicesState extends State<FindServices> {
 
   String _capitalize(String text) =>
       text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  String _locationLabel(Map<String, dynamic> data) {
+    final currentAddress =
+        data['currentLocationAddress']?.toString().trim() ?? '';
+    final workAddress = data['locationAddress']?.toString().trim() ?? '';
+    final profileAddress = data['address']?.toString().trim() ?? '';
+
+    if (currentAddress.isNotEmpty) return currentAddress;
+    if (workAddress.isNotEmpty) return workAddress;
+    if (profileAddress.isNotEmpty) return profileAddress;
+
+    return 'Location not available';
+  }
+
+  LatLng? _providerLatLng(Map<String, dynamic> data) {
+    final currentLat = _toDouble(data['currentLatitude']);
+    final currentLng = _toDouble(data['currentLongitude']);
+
+    if (currentLat != null && currentLng != null) {
+      return LatLng(currentLat, currentLng);
+    }
+
+    final workLat = _toDouble(data['latitude']);
+    final workLng = _toDouble(data['longitude']);
+
+    if (workLat != null && workLng != null) {
+      return LatLng(workLat, workLng);
+    }
+
+    return null;
+  }
+
+  String _distanceText(Map<String, dynamic> data) {
+    if (_userLatLng == null) return 'Distance unavailable';
+
+    final providerPoint = _providerLatLng(data);
+    if (providerPoint == null) return 'Distance unavailable';
+
+    final km = _locationService.calculateDistanceKmBetweenPoints(
+      _userLatLng!,
+      providerPoint,
+    );
+
+    return _locationService.formatDistanceKm(km);
+  }
+
+  double? _distanceKm(Map<String, dynamic> data) {
+    if (_userLatLng == null) return null;
+
+    final providerPoint = _providerLatLng(data);
+    if (providerPoint == null) return null;
+
+    return _locationService.calculateDistanceKmBetweenPoints(
+      _userLatLng!,
+      providerPoint,
+    );
+  }
+
+  bool _passesRadiusFilter(Map<String, dynamic> data) {
+    if (_radiusFilter == 'all') return true;
+    if (_userLatLng == null) return true;
+
+    final providerPoint = _providerLatLng(data);
+    if (providerPoint == null) return false;
+
+    final radiusKm = double.tryParse(_radiusFilter);
+    if (radiusKm == null) return true;
+
+    return _locationService.isWithinRadiusKm(
+      startLat: _userLatLng!.latitude,
+      startLng: _userLatLng!.longitude,
+      endLat: providerPoint.latitude,
+      endLng: providerPoint.longitude,
+      radiusKm: radiusKm,
+    );
+  }
+
+  bool _passesSearch(Map<String, dynamic> data) {
+    final search = _searchText.trim().toLowerCase();
+    if (search.isEmpty) return true;
+
+    final name = (data['name'] ?? '').toString().toLowerCase();
+    final serviceType = (data['serviceType'] ?? '').toString().toLowerCase();
+    final location = _locationLabel(data).toLowerCase();
+
+    return name.contains(search) ||
+        serviceType.contains(search) ||
+        location.contains(search);
+  }
 
   Widget _buildTopHeader(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
@@ -134,6 +251,11 @@ class _FindServicesState extends State<FindServices> {
               ),
             ),
           ),
+          IconButton(
+            onPressed: _loadCurrentLocation,
+            icon: const Icon(Icons.my_location, color: Colors.white),
+            tooltip: 'Refresh location',
+          ),
         ],
       ),
     );
@@ -167,8 +289,116 @@ class _FindServicesState extends State<FindServices> {
     );
   }
 
+  Widget _buildSearchBox() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) {
+          setState(() => _searchText = value);
+        },
+        decoration: InputDecoration(
+          hintText: 'Search provider or location',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchText.isEmpty
+              ? null
+              : IconButton(
+            onPressed: () {
+              _searchController.clear();
+              setState(() => _searchText = '');
+            },
+            icon: const Icon(Icons.close),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: borderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: primary, width: 1.4),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilters() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: _sortBy,
+              decoration: InputDecoration(
+                labelText: 'Sort by',
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: primary, width: 1.4),
+                ),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'nearest', child: Text('Nearest')),
+                DropdownMenuItem(value: 'name', child: Text('A-Z')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _sortBy = value);
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: _radiusFilter,
+              decoration: InputDecoration(
+                labelText: 'Radius',
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: primary, width: 1.4),
+                ),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All')),
+                DropdownMenuItem(value: '5', child: Text('Within 5 km')),
+                DropdownMenuItem(value: '10', child: Text('Within 10 km')),
+                DropdownMenuItem(value: '20', child: Text('Within 20 km')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _radiusFilter = value);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _providerCard(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
+    final locationText = _locationLabel(data);
+    final distanceText = _distanceText(data);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -196,7 +426,7 @@ class _FindServicesState extends State<FindServices> {
                 children: [
                   Expanded(
                     child: Text(
-                      data['name'] ?? 'Unknown',
+                      data['name']?.toString() ?? 'Unknown',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -225,7 +455,9 @@ class _FindServicesState extends State<FindServices> {
               ),
               const SizedBox(height: 8),
               Text(
-                _capitalize(selectedType),
+                _capitalize(
+                  (data['serviceType'] ?? selectedType).toString(),
+                ),
                 style: const TextStyle(
                   color: Colors.blueGrey,
                   fontWeight: FontWeight.w600,
@@ -238,6 +470,36 @@ class _FindServicesState extends State<FindServices> {
                   fontWeight: FontWeight.bold,
                   color: Colors.green,
                 ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on, size: 18, color: primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      locationText,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.near_me, size: 17, color: Colors.blueGrey),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      distanceText,
+                      style: const TextStyle(
+                        color: Colors.blueGrey,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               Align(
@@ -266,6 +528,85 @@ class _FindServicesState extends State<FindServices> {
     );
   }
 
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _prepareDocs(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+      ) {
+    final filtered = docs.where((doc) {
+      final data = doc.data();
+
+      final approved = (data['approved'] ?? false) == true;
+      final blocked = (data['blocked'] ?? false) == true;
+      final setupComplete = (data['setupComplete'] ?? false) == true;
+      final isAvailable = (data['isAvailable'] ?? true) == true;
+      final serviceTypeData =
+      (data['serviceType'] ?? '').toString().toLowerCase();
+
+      return approved &&
+          !blocked &&
+          setupComplete &&
+          isAvailable &&
+          serviceTypeData == selectedType &&
+          _passesSearch(data) &&
+          _passesRadiusFilter(data);
+    }).toList();
+
+    filtered.sort((a, b) {
+      final aData = a.data();
+      final bData = b.data();
+
+      if (_sortBy == 'nearest') {
+        final aDistance = _distanceKm(aData);
+        final bDistance = _distanceKm(bData);
+
+        if (aDistance != null && bDistance != null) {
+          return aDistance.compareTo(bDistance);
+        }
+        if (aDistance != null) return -1;
+        if (bDistance != null) return 1;
+      }
+
+      final aName = (aData['name'] ?? '').toString().toLowerCase();
+      final bName = (bData['name'] ?? '').toString().toLowerCase();
+      return aName.compareTo(bName);
+    });
+
+    return filtered;
+  }
+
+  Widget _buildLocationStatus() {
+    if (loadingLocation) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Getting your current location...',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.blueGrey,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          locationAvailable
+              ? 'Showing providers near your current location'
+              : 'Location unavailable. Showing all matching providers',
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.blueGrey,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -273,37 +614,8 @@ class _FindServicesState extends State<FindServices> {
       body: Column(
         children: [
           _buildTopHeader(context),
-          if (loadingLocation)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Checking provider availability...',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blueGrey,
-                  ),
-                ),
-              ),
-            ),
-          if (!loadingLocation)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  locationAvailable
-                      ? 'Showing currently available providers'
-                      : 'Showing available providers',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blueGrey,
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 8),
+          _buildLocationStatus(),
+          const SizedBox(height: 6),
           SizedBox(
             height: 48,
             child: ListView.separated(
@@ -317,7 +629,8 @@ class _FindServicesState extends State<FindServices> {
               },
             ),
           ),
-          const SizedBox(height: 12),
+          _buildSearchBox(),
+          _buildFilters(),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
@@ -328,48 +641,49 @@ class _FindServicesState extends State<FindServices> {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+
                 if (snap.hasError) {
                   return Center(child: Text('Error: ${snap.error}'));
                 }
 
-                final docs = (snap.data?.docs ?? []).where((doc) {
-                  final data = doc.data();
-                  final approved = (data['approved'] ?? false) == true;
-                  final blocked = (data['blocked'] ?? false) == true;
-                  final setupComplete = (data['setupComplete'] ?? false) == true;
-                  final isAvailable = (data['isAvailable'] ?? true) == true;
-                  final serviceTypeData =
-                  (data['serviceType'] ?? '').toString().toLowerCase();
-
-                  return approved &&
-                      !blocked &&
-                      setupComplete &&
-                      isAvailable &&
-                      serviceTypeData == selectedType;
-                }).toList()
-                  ..sort((a, b) {
-                    final aName =
-                    (a.data()['name'] ?? '').toString().toLowerCase();
-                    final bName =
-                    (b.data()['name'] ?? '').toString().toLowerCase();
-                    return aName.compareTo(bName);
-                  });
+                final allDocs = snap.data?.docs ?? [];
+                final docs = _prepareDocs(allDocs);
 
                 if (docs.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text(
-                        'No available providers found for this service right now',
-                        textAlign: TextAlign.center,
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.search_off,
+                            size: 52,
+                            color: Colors.blueGrey,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No ${_capitalize(selectedType)} providers found',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Try another category, search, or radius filter.',
+                            style: TextStyle(color: Colors.blueGrey),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   );
                 }
 
                 return ListView.builder(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     return _providerCard(docs[index]);

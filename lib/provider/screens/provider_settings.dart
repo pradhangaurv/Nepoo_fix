@@ -233,6 +233,12 @@ class _ProviderSettingsState extends State<ProviderSettings> {
         'locationAddress': locationAddress,
         'latitude': latitude,
         'longitude': longitude,
+
+        // added for last-known provider location support
+        'currentLatitude': latitude,
+        'currentLongitude': longitude,
+        'currentLocationAddress': locationAddress,
+
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -536,6 +542,16 @@ class _ProviderSettingsState extends State<ProviderSettings> {
                   SizedBox(
                     width: double.infinity,
                     height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: _pickWorkLocationOnMap,
+                      icon: const Icon(Icons.map),
+                      label: const Text('Pick Work Location on Map'),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: saving ? null : _saveAvailability,
                       style: ElevatedButton.styleFrom(
@@ -558,21 +574,14 @@ class _ProviderSettingsState extends State<ProviderSettings> {
                           : const Text('Save Settings'),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
-                    child: OutlinedButton.icon(
+                    child: TextButton.icon(
                       onPressed: _logout,
                       icon: const Icon(Icons.logout),
-                      label: const Text("Logout"),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
+                      label: const Text('Logout'),
                     ),
                   ),
                 ],
