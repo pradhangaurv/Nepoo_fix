@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-import 'register.dart';
+import 'package:nepoo_fix/auth/register.dart';
 import 'auth_gate.dart';
+import 'forgot_password.dart';
 
 class MyLogin extends StatefulWidget {
   const MyLogin({super.key});
@@ -278,9 +278,29 @@ class _MyLoginState extends State<MyLogin> {
                               color: primary,
                             ),
                           ),
-                        )
+                        ),
                       ],
-                    )
+                    ),
+                    const SizedBox(height: 16),
+                    // Forgot Password Button
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ForgotPasswordPage(),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        "Forgot Password?",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: primary,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
