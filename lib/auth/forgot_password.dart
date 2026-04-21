@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Firebase Authentication
 
 class ForgotPasswordPage extends StatefulWidget {
-  const ForgotPasswordPage({super.key});  // Simplified constructor with super.key
+  const ForgotPasswordPage({super.key});
 
   @override
   _ForgotPasswordPageState createState() => _ForgotPasswordPageState();
